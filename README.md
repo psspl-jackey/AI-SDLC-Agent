@@ -1,11 +1,113 @@
 # AI SDLC Agent
 
-An AI agent system that takes a client requirement in any form (full SOW, short brief, one-line idea, website link) and carries it through requirements, gap analysis, proposal, design, planning and build, with human approval gates.
+An AI agent system that takes a client requirement in any form (full SOW, short brief, one-line idea,
+website or app-store link) and carries it through requirements, gap analysis, proposal, design,
+planning and build, with human approval gates.
 
-The full system definition lives in the team doc. See `docs/` once the foundation branch is merged.
+This branch delivers the **foundation and Phase 1**: any input in, a gap-checked set of requirements
+out, approved at Gate 1 by the tech lead, delivery head and sales.
 
-## Branches
+The full system definition is the team doc "AI SDLC Agent: System Definition".
 
-- `main`: stable, released only through pull requests
-- `develop`: integration branch
-- `feature/*`: one branch per piece of work, merged into `develop` by pull request
+## What works today
+
+| Part | Status |
+| --- | --- |
+| Stage 0 intake: text, links, PDF, Word, Excel, CSV, Markdown | Working |
+| Normalized project brief with a source on every item | Working |
+| Completeness score (rich, partial, thin) and adaptive questionnaire, asked once | Working |
+| Requirements analyst: requirements with IDs, SOW and NFR gaps, client questions | Working |
+| Domain and market research: domain-pack gaps, compliance prompts, competitor features, review complaints | Working (competitors from links you give) |
+| Reviewer: duplicate gaps, unclear wording, dead evidence links | Working |
+| Gap register and code-based Gate 1 coverage check | Working |
+| Ask-but-do-not-stop question queue with an assumption log | Working |
+| Gate 1 approval by all three roles | Working |
+| Dashboard: new project, overview, questions, requirements, gaps, Gate 1, deliverables, trace and cost | Working |
+| Tracing and cost meter on every model call | Working |
+| Reading images and screenshots | Not yet (needs a vision model) |
+| Automatic competitor discovery by web search | Not yet (search provider not chosen) |
+| Stages 2 to 9 | Later phases |
+
+## Setup (macOS)
+
+You need Python 3.11 or newer and, for the free local model, [Ollama](https://ollama.com).
+
+```bash
+cd /Users/jackeykabra/AI-SDLC-Agent
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env
+```
+
+### Model: free local (default)
+
+```bash
+brew install ollama        # or download from ollama.com
+ollama serve               # leave running in its own terminal
+ollama pull qwen2.5:14b    # about 9 GB; needs roughly 16 GB+ RAM
+```
+
+On a machine with less memory, use `qwen2.5:7b` and set `OLLAMA_MODEL=qwen2.5:7b` in `.env`.
+Smaller models finish faster but find fewer gaps.
+
+### Model: Claude (when local quality is not enough)
+
+In `.env` set `MODEL_PROVIDER=anthropic`, add `ANTHROPIC_API_KEY`, and set `COST_INPUT_PER_MTOK` and
+`COST_OUTPUT_PER_MTOK` from the current Anthropic price list so the cost meter is accurate.
+No code changes are needed.
+
+## Run
+
+```bash
+streamlit run dashboard/app.py
+```
+
+Open the link it prints, create a project, add an input (try `samples/one_line_classifieds.txt`),
+answer the short questionnaire, and wait for Stage 1. Add 2 to 3 competitor links in the
+questionnaire to get competitor gaps.
+
+## Test
+
+```bash
+pytest -q
+```
+
+The tests use a scripted fake model, so they run without Ollama or Claude. GitHub Actions runs them
+on every push and pull request.
+
+## Project structure
+
+```
+src/sdlc_agent/
+  config.py              settings from .env
+  llm/                   one model interface: Ollama or Claude
+  state/                 project state model and store (JSON files for the demo)
+  intake/                Stage 0: detect input, read it, build the brief, questionnaire
+  agents/                requirements analyst, domain and market research, reviewer
+  gaps/                  gap register and the Gate 1 coverage check
+  questions/             question queue and assumption log
+  orchestrator/          LangGraph Stage 1 graph and Gate 1 decisions
+  tracing.py             per-project trace and cost meter
+  exports.py             requirements doc, gap register, competitor matrix, questions
+domain_packs/            feature checklists and compliance prompts per domain
+skills/                  reusable instructions for agents (NFR checklist)
+dashboard/               Streamlit dashboard
+samples/                 sample inputs and answer keys for the eval set
+tests/                   unit, pipeline and dashboard tests
+```
+
+## Working with Jira and GitHub
+
+- Tasks come from Jira tickets. GitHub holds the source code only.
+- Branches: `main` (stable), `develop` (integration), `feature/<JIRA-KEY>-short-name` for each ticket.
+- Open a pull request into `develop`; merge `develop` into `main` for a release. Nobody pushes to `main` directly.
+- Put the Jira key in the commit message, for example `SDLC-12: add PDF page references`.
+
+## Next steps
+
+1. Write the remaining sample inputs and answer keys (see `samples/README.md`).
+2. Run the samples on the local model, compare with the answer keys, and tune prompts.
+3. Choose a free search option for automatic competitor discovery and plug it into `SearchProvider`.
+4. Add a vision-capable model for screenshots and wireframes.
+5. Phase 2: platform decision, estimator, proposal doc and PPT in Prakash Infotech templates.

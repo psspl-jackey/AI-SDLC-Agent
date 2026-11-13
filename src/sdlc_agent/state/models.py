@@ -1,0 +1,215 @@
+"""Project state: everything the orchestrator tracks for one project.
+
+Field names follow the team definition doc (Stage 0 and Stage 1 in detail).
+"""
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+from enum import Enum
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field
+
+
+def now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Stage(str, Enum):
+    INTAKE = "0_intake"
+    REQUIREMENTS = "1_requirements"
+    PLATFORM = "2_platform"
+    PROPOSAL = "3_proposal"
+    DESIGN = "4_design"
+    SKILLS = "5_skills"
+    PLAN = "6_plan"
+    BUILD = "7_build"
+    QA_RELEASE = "8_qa_release"
+    HANDOVER = "9_handover"
+
+
+class StageStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    WAITING_GATE = "waiting_gate"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    FAILED = "failed"
+
+
+class InputType(str, Enum):
+    ONE_LINE = "one_line"
+    URL = "url"
+    APP_STORE_URL = "app_store_url"
+    DOCUMENT = "document"
+    IMAGE = "image"
+    NOTES = "notes"
+    MIXED = "mixed"
+
+
+class Completeness(str, Enum):
+    RICH = "rich"
+    PARTIAL = "partial"
+    THIN = "thin"
+
+
+class SourceRef(BaseModel):
+    """Where an item came from: a file and page, a URL, the intake form, or inferred by an agent."""
+
+    kind: Literal["file", "url", "intake", "inferred"]
+    ref: str = ""
+
+    def label(self) -> str:
+        return f"{self.kind}:{self.ref}" if self.ref else self.kind
+
+
+class RawInput(BaseModel):
+    kind: Literal["text", "file", "url"]
+    value: str  # the text itself, a file path, or a URL
+    detected_type: Optional[InputType] = None
+
+
+class Chunk(BaseModel):
+    """A piece of readable text extracted from one input, with its source."""
+
+    text: str
+    source: SourceRef
+
+
+class BriefItem(BaseModel):
+    text: str
+    source: SourceRef
+
+
+class ProjectBrief(BaseModel):
+    goal: str = ""
+    domain: str = ""
+    region: str = ""
+    target_users: list[str] = Field(default_factory=list)
+    intent: Literal["new", "rebuild", "like_reference", "unknown"] = "unknown"
+    platforms: list[str] = Field(default_factory=list)
+    features: list[BriefItem] = Field(default_factory=list)
+    nfrs: list[BriefItem] = Field(default_factory=list)
+    constraints: list[BriefItem] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
+    completeness: Completeness = Completeness.THIN
+
+
+class SowLine(BaseModel):
+    """One line of the client's input. Gate 1 requires every line to map to a requirement or be marked."""
+
+    id: str
+    text: str
+    source: SourceRef
+    requirement_ids: list[str] = Field(default_factory=list)
+    not_a_requirement: bool = False
+
+
+class Requirement(BaseModel):
+    id: str
+    text: str
+    kind: Literal["functional", "nfr"] = "functional"
+    source: SourceRef
+    sow_line_ids: list[str] = Field(default_factory=list)
+
+
+class GapSource(str, Enum):
+    SOW = "sow"
+    NFR = "nfr"
+    DOMAIN_CHECKLIST = "domain_checklist"
+    COMPETITOR_TABLE_STAKES = "competitor_table_stakes"
+    COMPETITOR_DIFFERENTIATOR = "competitor_differentiator"
+    REVIEW_MINED = "review_mined"
+    INFERRED = "inferred"
+
+
+# Gaps from these sources must carry an evidence link and a research date (Gate 1 rule).
+EVIDENCE_REQUIRED = {
+    GapSource.COMPETITOR_TABLE_STAKES,
+    GapSource.COMPETITOR_DIFFERENTIATOR,
+    GapSource.REVIEW_MINED,
+}
+
+
+class Bucket(str, Enum):
+    TABLE_STAKES = "table_stakes"
+    DIFFERENTIATOR = "differentiator"
+    ALREADY_IN_SOW = "already_in_sow"
+    NOT_RELEVANT = "not_relevant"
+    NONE = "none"
+
+
+class GapStatus(str, Enum):
+    ANSWERED = "answered"  # became a requirement
+    ASSUMED = "assumed"  # in the assumption log
+    OUT_OF_SCOPE = "out_of_scope"  # in exclusions
+    RECOMMENDED = "recommended"  # market gap offered to the client as an addition
+    OPEN = "open"  # waiting on the client, with an assumption attached
+
+
+class Gap(BaseModel):
+    id: str
+    source: GapSource
+    description: str
+    evidence_url: Optional[str] = None
+    research_date: Optional[date] = None
+    bucket: Bucket = Bucket.NONE
+    status: Optional[GapStatus] = None
+    linked_requirement_id: Optional[str] = None
+    assumption_id: Optional[str] = None
+    found_by: str = ""
+    found_at: datetime = Field(default_factory=now)
+
+
+class Assumption(BaseModel):
+    id: str
+    text: str
+    related_gap_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=now)
+
+
+class Question(BaseModel):
+    id: str
+    text: str
+    blocking: bool = False
+    related_gap_id: Optional[str] = None
+    assumed_answer: Optional[str] = None
+    answer: Optional[str] = None
+    asked_at: datetime = Field(default_factory=now)
+    answered_at: Optional[datetime] = None
+
+
+ApproverRole = Literal["tech_lead", "delivery_head", "sales"]
+GATE_APPROVERS: tuple[str, ...] = ("tech_lead", "delivery_head", "sales")
+
+
+class GateDecision(BaseModel):
+    gate: int
+    role: ApproverRole
+    approved: bool
+    comment: str = ""
+    decided_at: datetime = Field(default_factory=now)
+
+
+class Project(BaseModel):
+    id: str
+    name: str
+    created_at: datetime = Field(default_factory=now)
+    raw_inputs: list[RawInput] = Field(default_factory=list)
+    intake_answers: dict[str, str] = Field(default_factory=dict)
+    domain_pack: Optional[str] = None
+    brief: Optional[ProjectBrief] = None
+    sow_lines: list[SowLine] = Field(default_factory=list)
+    requirements: list[Requirement] = Field(default_factory=list)
+    gaps: list[Gap] = Field(default_factory=list)
+    assumptions: list[Assumption] = Field(default_factory=list)
+    questions: list[Question] = Field(default_factory=list)
+    competitors: list[dict] = Field(default_factory=list)  # [{name, url, features: [...], researched_on}]
+    gate_decisions: list[GateDecision] = Field(default_factory=list)
+    stage_status: dict[Stage, StageStatus] = Field(
+        default_factory=lambda: {s: StageStatus.PENDING for s in Stage}
+    )
+    notes: list[str] = Field(default_factory=list)  # orchestrator log visible on the dashboard
+
+    def log(self, message: str) -> None:
+        self.notes.append(f"{now():%Y-%m-%d %H:%M:%S} {message}")
