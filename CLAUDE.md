@@ -20,8 +20,10 @@ not new agents.
 
 ## Status
 
-- Done (branch `feature/foundation`): foundation + Phase 1 (Stages 0 and 1, Gate 1, dashboard).
-- Next: run sample inputs on the local model and tune prompts; then Phase 2 (Stages 2-3).
+- Done (branch `feature/foundation`): foundation + Phase 1 (Stages 0 and 1, Gate 1, dashboard), eval runner
+  and answer keys (classifieds key is a draft awaiting senior review).
+- Done (branch `feature/stage2-platform-decision`): Stage 2 platform decision agent, platform check, dashboard screen.
+- Next: pull a model and run the eval to tune prompts; then Stage 3 (estimator, proposal) and Gate 2.
 
 ## Decisions already made (do not re-ask)
 
@@ -65,7 +67,7 @@ not new agents.
 - `src/sdlc_agent/llm/` model interface (Ollama, Anthropic)
 - `src/sdlc_agent/state/` Project model and store
 - `src/sdlc_agent/intake/` detect input, readers, brief, questionnaire
-- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer (run() is pure, apply() merges)
+- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`

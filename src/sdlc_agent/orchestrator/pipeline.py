@@ -1,4 +1,4 @@
-"""Orchestrator for Phase 1: Stage 0 (intake) and Stage 1 (requirements and gap analysis) up to Gate 1.
+"""Orchestrator: Stage 0 (intake), Stage 1 (requirements and gap analysis) and Gate 1, Stage 2 (platforms).
 
 Stage 1 is a LangGraph graph:
 
@@ -15,7 +15,7 @@ from typing import Any, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from ..agents import domain_research, requirements_analyst, reviewer
+from ..agents import domain_research, platform_decision, requirements_analyst, reviewer
 from ..config import Settings, get_settings
 from ..gaps.register import add_gap, coverage_check, gate_passed, gate_status
 from ..intake.brief import apply_intake_answers, build_brief, completeness_of, extract_sow_lines
@@ -171,6 +171,9 @@ def run_stage1(deps: Deps, project_id: str) -> Project:
     # Re-running Stage 1 starts from a clean slate; intake results are kept.
     project.requirements, project.gaps, project.assumptions = [], [], []
     project.questions, project.competitors = [], []
+    # Stage 2 was built on the old requirements, so it must run again after the new Gate 1.
+    project.platform_matrix = None
+    project.stage_status[Stage.PLATFORM] = StageStatus.PENDING
     for line in project.sow_lines:
         line.requirement_ids, line.not_a_requirement = [], False
     project.gate_decisions = [d for d in project.gate_decisions if d.gate != 1]
@@ -210,4 +213,45 @@ def decide_gate1(deps: Deps, project: Project, role: str, approved: bool, commen
         waiting = [r for r, v in gate_status(project, 1).items() if v is not True]
         project.log(f"Gate 1 approved by {role}; waiting for {', '.join(waiting)}")
     deps.store.save(project)
+    return project
+
+
+# ---------- Stage 2: platform decision (no gate of its own; reviewed at Gate 2) ----------
+
+def _clear_stage2(project: Project) -> None:
+    """Re-running Stage 2 replaces its own inferred gaps, questions and assumptions; nothing else."""
+    old = {g.id for g in project.gaps if g.found_by == platform_decision.NAME}
+    project.gaps = [g for g in project.gaps if g.id not in old]
+    project.questions = [q for q in project.questions if q.related_gap_id not in old]
+    project.assumptions = [a for a in project.assumptions if a.related_gap_id not in old]
+    project.platform_matrix = None
+
+
+def run_stage2(deps: Deps, project_id: str) -> Project:
+    project = deps.store.load(project_id)
+    if project.stage_status[Stage.REQUIREMENTS] is not StageStatus.APPROVED:
+        raise RuntimeError("Gate 1 must be approved before the platform decision (Stage 2)")
+    _clear_stage2(project)
+    project.stage_status[Stage.PLATFORM] = StageStatus.RUNNING
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_start", "stage": Stage.PLATFORM.value})
+    try:
+        result = platform_decision.run(deps.llm_for(project.id, platform_decision.NAME), project)
+    except Exception as exc:
+        project.stage_status[Stage.PLATFORM] = StageStatus.FAILED
+        project.log(f"Stage 2 failed: {exc!r}")
+        deps.store.save(project)
+        deps.tracer.record(project_id, {"type": "stage_failed", "stage": Stage.PLATFORM.value, "error": repr(exc)})
+        raise
+    platform_decision.apply(project, result)
+    report = platform_decision.platform_check(project)
+    included = ", ".join(d.platform for d in project.platform_matrix.included())
+    project.stage_status[Stage.PLATFORM] = StageStatus.DONE
+    project.log(
+        f"Platform decision: {included}; approach {project.platform_matrix.approach}. "
+        + ("Platform check passed." if report.passed
+           else f"Platform check found {len(report.failures)} issue(s) to resolve before Gate 2.")
+    )
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.PLATFORM.value})
     return project

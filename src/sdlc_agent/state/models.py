@@ -35,6 +35,7 @@ class StageStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     FAILED = "failed"
+    DONE = "done"  # finished; the stage has no gate of its own (its output is reviewed at a later gate)
 
 
 class InputType(str, Enum):
@@ -191,6 +192,28 @@ class GateDecision(BaseModel):
     decided_at: datetime = Field(default_factory=now)
 
 
+# Platforms every project gets an explicit yes/no decision on in Stage 2.
+CORE_PLATFORMS: tuple[str, ...] = ("android", "ios", "web", "admin_panel", "backend")
+
+
+class PlatformDecision(BaseModel):
+    platform: str  # one of CORE_PLATFORMS, or another lower-case name such as "smart_tv"
+    included: bool
+    reason: str = ""
+    source: Literal["client", "inferred"] = "inferred"  # client stated it, or the agent decided
+    requirement_ids: list[str] = Field(default_factory=list)
+
+
+class PlatformMatrix(BaseModel):
+    decisions: list[PlatformDecision] = Field(default_factory=list)
+    approach: Literal["native", "cross_platform", "web_only", "not_applicable"] = "not_applicable"
+    approach_reason: str = ""
+    decided_at: datetime = Field(default_factory=now)
+
+    def included(self) -> list[PlatformDecision]:
+        return [d for d in self.decisions if d.included]
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -205,6 +228,7 @@ class Project(BaseModel):
     assumptions: list[Assumption] = Field(default_factory=list)
     questions: list[Question] = Field(default_factory=list)
     competitors: list[dict] = Field(default_factory=list)  # [{name, url, features: [...], researched_on}]
+    platform_matrix: Optional[PlatformMatrix] = None  # Stage 2
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(
         default_factory=lambda: {s: StageStatus.PENDING for s in Stage}

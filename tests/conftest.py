@@ -59,6 +59,21 @@ class FakeLLM:
         elif "competitor apps" in system:
             data = {"missing": [{"feature": "In-app chat", "competitor_ids": ["C1", "C2"]},
                                 {"feature": "Saved searches", "competitor_ids": ["C1"]}]}
+        elif "solution architect" in system:
+            data = {
+                "platforms": [
+                    {"platform": "Android", "included": True, "reason": "Sellers post from phones",
+                     "requirement_ids": ["REQ-001"]},
+                    {"platform": "iOS", "included": False, "reason": "Android dominates in Gujarat",
+                     "requirement_ids": []},
+                    {"platform": "web", "included": False, "reason": "Mobile-first audience", "requirement_ids": []},
+                    {"platform": "Admin panel", "included": True, "reason": "Moderators review ads",
+                     "requirement_ids": ["REQ-001", "REQ-999"]},
+                    {"platform": "backend", "included": True, "reason": "Stores ads and users",
+                     "requirement_ids": ["REQ-001"]},
+                ],
+                "approach": "cross_platform", "approach_reason": "One codebase for Android and iOS",
+            }
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:

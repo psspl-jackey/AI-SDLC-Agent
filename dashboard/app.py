@@ -1,4 +1,4 @@
-"""Dashboard v1 for the AI SDLC Agent (Phase 1: intake to Gate 1).
+"""Dashboard v1 for the AI SDLC Agent (intake, Stage 1 and Gate 1, Stage 2 platform decision).
 
 Run from the repo root:  streamlit run dashboard/app.py
 """
@@ -12,7 +12,8 @@ import streamlit as st
 from sdlc_agent import exports
 from sdlc_agent.gaps.register import coverage_check, gate_status
 from sdlc_agent.intake.questionnaire import build_questionnaire
-from sdlc_agent.orchestrator import Deps, decide_gate1, finish_intake, run_stage1, start_intake
+from sdlc_agent.agents.platform_decision import platform_check
+from sdlc_agent.orchestrator import Deps, decide_gate1, finish_intake, run_stage1, run_stage2, start_intake
 from sdlc_agent.questions.queue import answer_question, open_questions
 from sdlc_agent.state.models import GATE_APPROVERS, RawInput, Stage, StageStatus
 
@@ -27,7 +28,7 @@ STAGE_LABELS = {
 }
 STATUS_ICON = {
     StageStatus.PENDING: "⚪", StageStatus.RUNNING: "🔵", StageStatus.WAITING_GATE: "🟡",
-    StageStatus.APPROVED: "🟢", StageStatus.REJECTED: "🔴", StageStatus.FAILED: "🔴",
+    StageStatus.APPROVED: "🟢", StageStatus.REJECTED: "🔴", StageStatus.FAILED: "🔴", StageStatus.DONE: "🟢",
 }
 
 
@@ -61,7 +62,7 @@ with st.sidebar:
     page = None
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
-                                   "Gate 1 approval", "Deliverables", "Trace and cost"])
+                                   "Gate 1 approval", "Platforms", "Deliverables", "Trace and cost"])
 
 
 # ---------- new project ----------
@@ -254,6 +255,38 @@ def gate1_screen(project) -> None:
         st.rerun()
 
 
+def platforms_screen(project) -> None:
+    st.header("Stage 2: platform decision")
+    st.write("The agent maps the approved requirements to platforms. Platforms the client stated are always "
+             "kept; platforms the agent adds are logged as assumptions. Reviewed at Gate 2.")
+    gate1_ok = project.stage_status[Stage.REQUIREMENTS] is StageStatus.APPROVED
+    if not gate1_ok:
+        st.info("Approve Gate 1 first. The platform decision works from the approved requirements.")
+    label = "Run Stage 2" if project.platform_matrix is None else "Run Stage 2 again"
+    if st.button(label, type="primary", disabled=not gate1_ok):
+        with st.spinner("Deciding platforms"):
+            try:
+                run_stage2(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        st.rerun()
+    m = project.platform_matrix
+    if m is None:
+        return
+    st.dataframe([{"Platform": d.platform.replace("_", " "), "Included": "yes" if d.included else "no",
+                   "Source": d.source, "Reason": d.reason, "Requirements": ", ".join(d.requirement_ids)}
+                  for d in m.decisions], hide_index=True, width="stretch")
+    st.write(f"**Delivery approach:** {m.approach.replace('_', ' ')}. {m.approach_reason}")
+    report = platform_check(project)
+    if report.passed:
+        st.success("Platform check passed.")
+    else:
+        st.error("Platform check: resolve these before Gate 2.")
+        for f in report.failures:
+            st.write(f"- {f}")
+
+
 def deliverables_screen(project) -> None:
     st.header("Deliverables")
     st.download_button("Requirements document (.md)", exports.requirements_markdown(project),
@@ -263,6 +296,8 @@ def deliverables_screen(project) -> None:
                        file_name=f"{project.id}-competitors.csv", disabled=not project.competitors)
     st.download_button("Client question list (.md)", exports.questions_markdown(project),
                        file_name=f"{project.id}-questions.md")
+    st.download_button("Platform matrix (.md)", exports.platform_matrix_markdown(project),
+                       file_name=f"{project.id}-platforms.md", disabled=project.platform_matrix is None)
 
 
 def trace_screen(project) -> None:
@@ -286,6 +321,7 @@ else:
     current = deps.store.load(choice)
     {
         "Overview": overview, "Questions": questions_screen, "Requirements": requirements_screen,
-        "Gap register": gaps_screen, "Gate 1 approval": gate1_screen, "Deliverables": deliverables_screen,
+        "Gap register": gaps_screen, "Gate 1 approval": gate1_screen, "Platforms": platforms_screen,
+        "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,
     }[page](current)

@@ -72,3 +72,27 @@ def questions_markdown(p: Project) -> str:
         status = f"Answered: {q.answer}" if q.answer else f"We assumed: {q.assumed_answer or 'n/a'}"
         out.append(f"- **{q.id}**{' (blocking)' if q.blocking else ''} {q.text}  \n  {status}")
     return "\n".join(out) + "\n"
+
+
+def platform_matrix_markdown(p: Project) -> str:
+    from .agents.platform_decision import platform_check
+
+    m = p.platform_matrix
+    out = [f"# Platform matrix: {p.name}", ""]
+    if m is None:
+        return "\n".join(out + ["Stage 2 has not run yet."]) + "\n"
+    req = {r.id: r.text for r in p.requirements}
+    out += ["| Platform | Included | Source | Reason | Requirements |", "| --- | --- | --- | --- | --- |"]
+    for d in m.decisions:
+        out.append(f"| {d.platform.replace('_', ' ')} | {'yes' if d.included else 'no'} | {d.source} | "
+                   f"{d.reason} | {', '.join(d.requirement_ids)} |")
+    out += ["", f"**Delivery approach:** {m.approach.replace('_', ' ')}. {m.approach_reason}", ""]
+    unserved = [r for r in p.requirements if r.kind == "functional"
+                and not any(r.id in d.requirement_ids for d in m.included())]
+    if unserved:
+        out += ["## Requirements not served by any included platform", ""]
+        out += [f"- **{r.id}** {req[r.id]}" for r in unserved] + [""]
+    report = platform_check(p)
+    out += ["## Platform check", "", "Passed." if report.passed else "Failed:"]
+    out += [f"- {f}" for f in report.failures]
+    return "\n".join(out) + "\n"
