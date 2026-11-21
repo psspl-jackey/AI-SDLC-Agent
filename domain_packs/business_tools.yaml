@@ -1,0 +1,21 @@
+name: business_tools
+aliases: [business tool, crm, erp, hrms, internal tool, dashboard, saas, b2b]
+features:
+  - {id: BT-01, name: Role-based access control, tier: table_stakes}
+  - {id: BT-02, name: User and team management, tier: table_stakes}
+  - {id: BT-03, name: Dashboard with key metrics, tier: table_stakes}
+  - {id: BT-04, name: "Create, edit, list, search records", tier: table_stakes}
+  - {id: BT-05, name: Export to Excel or PDF, tier: table_stakes}
+  - {id: BT-06, name: Audit log of changes, tier: table_stakes}
+  - {id: BT-07, name: Email or in-app notifications, tier: table_stakes}
+  - {id: BT-08, name: Bulk import from Excel, tier: common}
+  - {id: BT-09, name: Approval workflows, tier: common}
+  - {id: BT-10, name: Reports with date filters, tier: common}
+  - {id: BT-11, name: Single sign-on, tier: common}
+  - {id: BT-12, name: Mobile access, tier: common}
+nfrs:
+  - Data backup and restore
+  - Permission checks on every API
+  - Performance with large record counts
+compliance:
+  - {region: India, note: "Digital Personal Data Protection Act, 2023 if employee or customer personal data is stored"}

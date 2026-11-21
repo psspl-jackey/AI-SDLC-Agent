@@ -1,0 +1,16 @@
+name: nextjs
+title: Next.js (React, TypeScript)
+platforms: [web, admin_panel]
+approach: web
+architecture:
+  - App Router; server rendering for public, SEO-relevant pages; client components only where needed
+  - Calls the backend API; no business logic duplicated in route handlers
+conventions:
+  - TypeScript strict mode; ESLint and Prettier clean before every pull request
+security:
+  - httpOnly cookie sessions; CSP headers; role checks in middleware for admin routes
+testing:
+  - Vitest and Testing Library; Playwright for main flows
+ci:
+  - "GitHub Actions: lint, type check, unit tests and next build on every pull request"
+  - "Deploy previews per pull request; promote the same build to staging and production"

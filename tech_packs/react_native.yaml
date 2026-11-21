@@ -1,0 +1,16 @@
+name: react_native
+title: React Native (TypeScript)
+platforms: [android, ios]
+approach: cross_platform
+architecture:
+  - Feature folders; React Query for server state, Zustand or Redux Toolkit for app state
+  - Typed API client generated from or checked against the backend API contract
+conventions:
+  - TypeScript strict mode; ESLint and Prettier clean before every pull request
+security:
+  - Tokens in Keychain / Keystore via a secure storage library; no secrets in the JS bundle
+testing:
+  - Jest and React Native Testing Library; Detox or Maestro for main flows
+ci:
+  - "GitHub Actions: lint, type check and Jest on every pull request"
+  - "Native builds with EAS Build or fastlane; signing secrets only in CI"

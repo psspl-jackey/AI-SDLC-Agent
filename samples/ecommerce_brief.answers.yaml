@@ -1,0 +1,115 @@
+# Answer key: ecommerce_brief.md (short brief, e-commerce, India)
+#
+# match: every inner list must have at least one term that appears in the gap's description or its
+# client question, at the start of a word, case-insensitive ("notif" matches "notifications").
+# Keep terms broad enough to accept any sensible wording, narrow enough not to match other gaps.
+
+name: ecommerce_brief
+input: {kind: file, value: ecommerce_brief.md}
+
+# What a client would type into the intake form for this brief. Platforms, deadline and expected
+# scale are left blank on purpose: they are planted gaps and must surface in Stage 1.
+intake_answers:
+  domain: e-commerce
+  region: Gujarat, India
+  intent: new
+
+gaps:
+  - id: P-01
+    type: sow
+    text: '"The app should be fast" is vague (no measurable target)'
+    match: [[fast, performance, speed, load time, response time, latency]]
+  - id: P-02
+    type: sow
+    text: '"Launch before Diwali" has no year or date; timeline feasibility unknown'
+    match: [[diwali, launch, deadline, timeline, release date]]
+  - id: P-03
+    type: sow
+    text: Platforms not stated (Android, iOS or both)
+    match: [[platform, android, ios]]
+  - id: P-04
+    type: sow
+    text: Login method not stated
+    match: [[login, log in, sign in, sign-in, signup, sign up, registration, authentication, otp, account creation]]
+  - id: P-05
+    type: nfr
+    text: No expected user scale
+    match: [[scale, scalab, concurrent, number of users, user base, how many users, traffic]]
+  - id: P-06
+    type: nfr
+    text: No data privacy or account deletion requirement (DPDP Act, India)
+    match: [[privacy, personal data, data protection, dpdp, account deletion, delete account, delete their account]]
+  - id: P-07
+    type: domain_checklist
+    text: Search and filters missing (table stakes)
+    match: [[search, filter]]
+  - id: P-08
+    type: domain_checklist
+    text: Returns and cancellations missing (table stakes)
+    match: [[return, cancel, refund]]
+  - id: P-09
+    type: domain_checklist
+    text: Order and delivery notifications missing (table stakes)
+    match: [[notif, alert, push, sms, whatsapp]]
+  - id: P-10
+    type: domain_checklist
+    text: Order tracking missing (table stakes)
+    match: [[track, shipment status, delivery status, order status]]
+  - id: P-11
+    type: domain_checklist
+    text: Ratings and reviews missing (common)
+    match: [[rating, review]]
+  - id: P-12
+    type: domain_checklist
+    text: Coupons and offers missing (common)
+    match: [[coupon, offer, discount, promo]]
+  - id: P-13
+    type: domain_checklist
+    text: GST invoice missing (common)
+    match: [[gst, invoice]]
+
+requirements:
+  - id: R-01
+    text: Browse products by category (sarees, dupattas, stoles)
+    match: [[browse, categor, catalog]]
+  - id: R-02
+    text: Product detail with photos, price, fabric, weaver
+    match: [[photo, image, fabric, weaver]]
+  - id: R-03
+    text: Add items to cart
+    match: [[cart]]
+  - id: R-04
+    text: Place an order
+    match: [[order], [place, placing, checkout, check out, submit]]
+  - id: R-05
+    text: Checkout with a dummy payment gateway (scope rule; real payment is out of scope)
+    match: [[pay], [dummy, mock, static, simulated, simulation, sandbox, stub]]
+  - id: R-06
+    text: Order history
+    match: [[past order, order history, previous order, my orders, view orders, see orders, list of orders]]
+  - id: R-07
+    text: Admin can add and manage products
+    match: [[admin], [product]]
+  - id: R-08
+    text: Admin can view orders
+    match: [[admin], [order]]
+
+# Gaps that are real but were not planted. They count as neither found nor false.
+also_valid:
+  - {id: V-01, text: Wishlist, match: [[wishlist, wish list]]}
+  - {id: V-02, text: Address management, match: [[address]]}
+  - {id: V-03, text: Cash on delivery, match: [[cash on delivery, cod]]}
+  - {id: V-04, text: Recommendations, match: [[recommend, similar product, recently viewed]]}
+  - {id: V-05, text: Inventory and stock, match: [[inventory, stock]]}
+  - {id: V-06, text: Product variants, match: [[variant, size, colour, color]]}
+  - {id: V-07, text: Consumer Protection (E-Commerce) Rules, match: [[consumer protection, grievance]]}
+  - {id: V-08, text: Security of personal and payment data, match: [[security, secure, encrypt]]}
+  - {id: V-09, text: Accessibility, match: [[accessib]]}
+  - {id: V-10, text: Languages, match: [[language, multilingual, gujarati, hindi, locali]]}
+  - {id: V-11, text: Offline or poor network, match: [[offline, network, connectivity]]}
+  - {id: V-12, text: Availability, uptime and backup, match: [[availability, uptime, backup]]}
+  - {id: V-13, text: Analytics and reporting, match: [[analytics, report]]}
+  - {id: V-14, text: Shipping and delivery charges, match: [[shipping, delivery charge, delivery fee]]}
+  - {id: V-15, text: Customer support, match: [[support, contact us, help]]}
+  - {id: V-16, text: Admin roles and access, match: [[admin], [role, access, permission]]}
+  - {id: V-17, text: Competitor list needed (research could not run), match: [[competitor]]}

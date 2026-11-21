@@ -1,0 +1,16 @@
+name: swift_ios
+title: Native iOS (Swift, SwiftUI)
+platforms: [ios]
+approach: native
+architecture:
+  - MVVM with SwiftUI; ObservableObject view models; async/await for networking
+  - Feature modules via Swift Package Manager; a thin API client layer with Codable models
+conventions:
+  - Swift API design guidelines; SwiftLint clean before every pull request
+security:
+  - Tokens in the Keychain; App Transport Security on; no secrets in the bundle
+testing:
+  - XCTest for view models and services; XCUITest for main flows
+ci:
+  - "GitHub Actions on macOS runners (or Xcode Cloud): SwiftLint and XCTest on every pull request"
+  - "Archive and TestFlight upload from CI; certificates managed with fastlane match"

@@ -1,0 +1,17 @@
+name: nodejs_backend
+title: Node.js backend (TypeScript, NestJS, PostgreSQL)
+platforms: [backend]
+approach: backend
+architecture:
+  - "Modular monolith: one NestJS module per domain area; REST API documented with OpenAPI"
+  - PostgreSQL with migrations; object storage for images; background jobs for notifications
+conventions:
+  - TypeScript strict mode; ESLint and Prettier clean; one migration per schema change
+security:
+  - JWT access tokens with refresh tokens; input validation on every endpoint; rate limiting on auth
+  - Secrets from environment or a secret manager, never in the repository
+testing:
+  - Unit tests for services; API tests against a test database for every endpoint
+ci:
+  - "GitHub Actions: lint, unit and API tests against a PostgreSQL service container on every pull request"
+  - "Docker image built once per merge; migrations run before the new version takes traffic"
