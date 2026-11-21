@@ -11,3 +11,6 @@ security:
   - httpOnly cookie sessions; CSP headers; role checks in middleware for admin routes
 testing:
   - Vitest and Testing Library; Playwright for main flows
+ci:
+  - "GitHub Actions: lint, type check, unit tests and next build on every pull request"
+  - "Deploy previews per pull request; promote the same build to staging and production"

@@ -11,3 +11,6 @@ security:
   - Spring Security with JWT; Bean Validation on every request; rate limiting on auth
 testing:
   - JUnit 5 and Mockito for services; Testcontainers-based API tests
+ci:
+  - "GitHub Actions: build, static checks and tests (Testcontainers) on every pull request"
+  - "Container image built once per merge; Flyway migrations run on startup"

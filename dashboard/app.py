@@ -1,4 +1,4 @@
-"""Dashboard v1 for the AI SDLC Agent (intake through Stage 4 solution design and Gate 3).
+"""Dashboard v1 for the AI SDLC Agent (intake through Stage 5 skills setup).
 
 Run from the repo root:  streamlit run dashboard/app.py
 """
@@ -16,7 +16,7 @@ from sdlc_agent.agents import estimator
 from sdlc_agent.agents.platform_decision import platform_check
 from sdlc_agent.orchestrator import (
     Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
-    run_stage2, run_stage3, run_stage4, start_intake, submit_change_request,
+    run_stage2, run_stage3, run_stage4, run_stage5, start_intake, submit_change_request,
 )
 from sdlc_agent.orchestrator.pipeline import GATE_STAGE
 from sdlc_agent.questions.queue import answer_question, open_questions
@@ -68,7 +68,7 @@ with st.sidebar:
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
                                    "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
-                                   "Design", "Gate 3 approval", "Change requests", "Deliverables",
+                                   "Design", "Gate 3 approval", "Skills", "Change requests", "Deliverables",
                                    "Trace and cost"])
 
 
@@ -322,6 +322,32 @@ def design_screen(project) -> None:
     st.markdown(exports.architecture_markdown(project))
 
 
+def skills_screen(project) -> None:
+    st.header("Stage 5: skills setup")
+    st.write("One skill per chosen stack, with every company rule from its tech pack plus rules added for this "
+             "project, and a project context skill written from the approved design. Exported in the Claude Code "
+             "skill layout for the Stage 7 coding agents.")
+    ready = project.stage_status[Stage.DESIGN] is StageStatus.APPROVED
+    if not ready:
+        st.info("Approve the solution design at Gate 3 first.")
+    label = "Run Stage 5" if project.skill_pack is None else "Run Stage 5 again"
+    if st.button(label, type="primary", disabled=not ready):
+        with st.spinner("Selecting and tailoring skills"):
+            try:
+                run_stage5(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        st.rerun()
+    if project.skill_pack is None:
+        return
+    st.download_button("Skill pack (.zip)", exports.skill_pack_zip(project), file_name=f"{project.id}-skills.zip")
+    for f in project.skill_pack.files:
+        added = sum(len(v) for v in f.tailored.values())
+        with st.expander(f"{f.name} · {', '.join(f.platforms)}" + (f" · {added} project rules" if added else "")):
+            st.markdown(f.content)
+
+
 def change_requests_screen(project) -> None:
     st.header("Change requests")
     st.write("A change re-enters at Stage 1: requirements are updated, Gate 1 opens again, and after approval "
@@ -444,6 +470,8 @@ def deliverables_screen(project) -> None:
                        file_name=f"{project.id}-estimate.md", disabled=project.estimate is None)
     st.download_button("Architecture document (.md)", exports.architecture_markdown(project),
                        file_name=f"{project.id}-architecture.md", disabled=project.design is None)
+    st.download_button("Skill pack (.zip)", exports.skill_pack_zip(project), file_name=f"{project.id}-skills.zip",
+                       disabled=project.skill_pack is None)
 
 
 def trace_screen(project) -> None:
@@ -469,7 +497,7 @@ else:
         "Overview": overview, "Questions": questions_screen, "Requirements": requirements_screen,
         "Gap register": gaps_screen, "Gate 1 approval": lambda p: gate_screen(p, 1), "Platforms": platforms_screen,
         "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
-        "Design": design_screen, "Gate 3 approval": lambda p: gate_screen(p, 3),
+        "Design": design_screen, "Gate 3 approval": lambda p: gate_screen(p, 3), "Skills": skills_screen,
         "Change requests": change_requests_screen,
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,

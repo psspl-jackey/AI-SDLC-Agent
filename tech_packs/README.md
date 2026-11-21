@@ -9,7 +9,7 @@ Fields:
 - `title`: human name
 - `platforms`: which project platforms it can build (android, ios, web, admin_panel, backend)
 - `approach`: native, cross_platform, web or backend
-- `architecture`, `conventions`, `security`, `testing`: the rules developer agents and humans follow;
+- `architecture`, `conventions`, `security`, `testing`, `ci`: the rules developer agents and humans follow;
   Stage 5 tailors them into the project skill pack
 
 These are v1 starting points written with Claude Code. Review and extend them with what the team

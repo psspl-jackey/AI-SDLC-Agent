@@ -11,3 +11,6 @@ security:
   - Tokens in httpOnly cookies set by the backend; CSP headers; role checks on every admin route
 testing:
   - Vitest and Testing Library for components; Playwright for main flows
+ci:
+  - "GitHub Actions: lint, type check, unit tests and a production build on every pull request"
+  - "Deploy previews per pull request; promote the same build artifact to staging and production"

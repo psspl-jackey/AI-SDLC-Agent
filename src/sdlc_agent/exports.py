@@ -241,3 +241,16 @@ def architecture_markdown(p: Project) -> str:
     out += ["## Design check", "", "Passed." if report.passed else "Failed:"]
     out += [f"- {f}" for f in report.failures]
     return "\n".join(out) + "\n"
+
+
+def skill_pack_zip(p: Project) -> bytes:
+    """Project skill pack as skills/<name>/SKILL.md files (Claude Code skill layout)."""
+    import zipfile
+
+    from .agents.skills_setup import skill_markdown
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in (p.skill_pack.files if p.skill_pack else []):
+            zf.writestr(f"skills/{f.name}/SKILL.md", skill_markdown(f))
+    return buf.getvalue()

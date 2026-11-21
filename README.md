@@ -34,7 +34,8 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Proposal doc and PPT in company templates | Waiting for template files |
 | Stage 4 solution design: stacks from tech packs, components, data model, API, screens and flows; architecture doc with diagrams | Working (wireframes as screen lists, not drawings) |
 | Gate 3 approval by all three roles, blocked while the design check fails | Working |
-| Stages 5 to 9 | Later phases |
+| Stage 5 skills setup: project skill pack from tech packs, tailored rules added, Claude Code SKILL.md layout | Working |
+| Stages 6 to 9 | Later phases |
 
 ## Setup (macOS)
 

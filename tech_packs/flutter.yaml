@@ -15,3 +15,6 @@ security:
   - Certificate pinning for production APIs; no secrets in the app bundle
 testing:
   - Unit tests for domain and repositories; widget tests for key screens; integration tests for main flows
+ci:
+  - "GitHub Actions: flutter analyze, flutter test on every pull request"
+  - "Release builds per flavour; Android App Bundle and iOS archive built in CI, signed with secrets from the CI store"

@@ -144,6 +144,15 @@ class FakeLLM:
                     {"key": "S2", "name": "Post ad", "purpose": "Create an ad", "requirement_ids": req_ids,
                      "navigates_to": ["S1"]},
                 ]}
+        elif "tailor a software company" in system:
+            data = {
+                "architecture": ["Keep the Ad entity as the single source for listing data"],
+                "conventions": ["Effective Dart style; flutter analyze and dart format clean before every pull request",
+                                "Name screens after the design's screen ids, e.g. SCR-001"],
+                "security": "Never log ad photos' EXIF location, Strip EXIF before upload",
+                "testing": [f"Rule {i}" for i in range(9)],
+                "ci": [],
+            }
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:

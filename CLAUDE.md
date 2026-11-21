@@ -33,7 +33,9 @@ not new agents.
 - Done (branch `feature/llm-json-hardening`, stacked): JSON retry and shape coercion for every model call.
 - Done (branch `feature/stage4-solution-design`, stacked): Stage 4 solution design (stacks from tech packs,
   components, data model, API, screens and flows), architecture doc with Mermaid diagrams, Gate 3.
-- Next: pull a model and run the eval to tune prompts; Stage 5 skills setup (tailor tech packs into a project skill pack); rate card for team plan, timeline and cost; proposal doc and
+- Done (branch `feature/stage5-skills-setup`, stacked): Stage 5 skill pack (company rules from tech packs kept,
+  model only adds project rules, project context skill from the design, Claude Code SKILL.md layout).
+- Next: pull a model and run the eval to tune prompts; Stage 6 internal plan (sprints, Jira tickets) needs the Jira key; rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.
 
 ## Decisions already made (do not re-ask)
@@ -82,7 +84,7 @@ not new agents.
 - `src/sdlc_agent/llm/` model interface (Ollama, Anthropic)
 - `src/sdlc_agent/state/` Project model and store
 - `src/sdlc_agent/intake/` detect input, readers, brief, questionnaire
-- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design (run() is pure, apply() merges)
+- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design, skills_setup (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `tech_packs/*.yaml` (stacks Stage 4 may choose), `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`

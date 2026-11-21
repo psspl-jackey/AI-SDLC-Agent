@@ -13,3 +13,6 @@ security:
   - Tokens in EncryptedSharedPreferences or DataStore with Keystore; R8 enabled for release
 testing:
   - JUnit and MockK for view models and repositories; Compose UI tests for main flows
+ci:
+  - "GitHub Actions: ktlint, detekt, unit tests on every pull request"
+  - "Signed release App Bundle built in CI; signing keys only in CI secrets"

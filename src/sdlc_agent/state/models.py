@@ -336,6 +336,20 @@ class SolutionDesign(BaseModel):
     created_at: datetime = Field(default_factory=now)
 
 
+class SkillFile(BaseModel):
+    name: str  # kebab-case; exported as <name>/SKILL.md
+    description: str  # when to use the skill (skill front matter)
+    platforms: list[str] = Field(default_factory=list)
+    pack: Optional[str] = None  # tech pack it came from; None for the project-wide context skill
+    content: str  # Markdown body
+    tailored: dict[str, list[str]] = Field(default_factory=dict)  # section -> rules added for this project
+
+
+class SkillPack(BaseModel):
+    files: list[SkillFile] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=now)
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -354,6 +368,7 @@ class Project(BaseModel):
     estimate: Optional[Estimate] = None  # Stage 3
     client_decision: Optional[ClientDecision] = None  # after Gate 2
     design: Optional[SolutionDesign] = None  # Stage 4
+    skill_pack: Optional[SkillPack] = None  # Stage 5
     change_requests: list[ChangeRequest] = Field(default_factory=list)
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(

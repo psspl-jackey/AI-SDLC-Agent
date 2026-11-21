@@ -28,7 +28,7 @@ def test_dashboard_screens_and_gate1(settings, monkeypatch):
     at.session_state["project_id"] = project.id
     at.run()
     for screen in ["Overview", "Questions", "Requirements", "Gap register",
-                   "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval", "Design", "Gate 3 approval", "Change requests",
+                   "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval", "Design", "Gate 3 approval", "Skills", "Change requests",
                    "Deliverables", "Trace and cost"]:
         at.sidebar.radio[0].set_value(screen).run()
         assert not at.exception, screen
@@ -71,6 +71,10 @@ def test_dashboard_screens_and_gate1(settings, monkeypatch):
         next(b for b in at.button if b.label == "Approve").click().run()
         assert not at.exception
     assert deps.store.load(project.id).stage_status[Stage.DESIGN] is StageStatus.APPROVED
+    at.sidebar.radio[0].set_value("Skills").run()
+    next(b for b in at.button if b.label == "Run Stage 5").click().run()
+    assert not at.exception
+    assert deps.store.load(project.id).stage_status[Stage.SKILLS] is StageStatus.DONE
 
     at.sidebar.radio[0].set_value("Change requests").run()
     at.text_area[0].input("Sellers should be able to mark ads as sold").run()

@@ -43,7 +43,9 @@ def test_tech_packs_are_well_formed():
         assert p["name"] == name
         assert set(p["platforms"]) <= {"android", "ios", "web", "admin_panel", "backend"}
         assert p["approach"] in ("native", "cross_platform", "web", "backend")
-        assert all(p.get(k) for k in ("architecture", "conventions", "security", "testing")), name
+        for k in ("architecture", "conventions", "security", "testing", "ci"):
+            # An unquoted "Label: text" list item parses as a dict, not a rule.
+            assert p.get(k) and all(isinstance(r, str) for r in p[k]), f"{name}.{k}: quote rules containing ': '"
 
 
 def test_stage4_needs_client_approval(deps):

@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from ..agents import domain_research, estimator, platform_decision, requirements_analyst, reviewer, solution_design
+from ..agents import domain_research, estimator, platform_decision, requirements_analyst, reviewer, skills_setup, solution_design
 from ..config import Settings, get_settings
 from ..gaps.register import add_gap, coverage_check, gate_passed, gate_status
 from ..intake.brief import apply_intake_answers, build_brief, completeness_of, extract_sow_lines
@@ -237,7 +237,7 @@ def decide_gate1(deps: Deps, project: Project, role: str, approved: bool, commen
 
 def _reset_from(project: Project, stage: Stage) -> None:
     """A stage re-runs on new inputs, so everything after it must run again."""
-    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN]
+    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS]
     for s in order[order.index(stage):] if stage in order else []:
         project.stage_status[s] = StageStatus.PENDING
         if s is Stage.PLATFORM:
@@ -249,6 +249,8 @@ def _reset_from(project: Project, stage: Stage) -> None:
         if s is Stage.DESIGN:
             project.design = None
             project.gate_decisions = [d for d in project.gate_decisions if d.gate != 3]
+        if s is Stage.SKILLS:
+            project.skill_pack = None
 
 
 def _supersede_pending_change(project: Project, by: str) -> None:
@@ -427,7 +429,7 @@ def submit_change_request(deps: Deps, project_id: str, text: str) -> Project:
     project.stage_status[Stage.REQUIREMENTS] = StageStatus.WAITING_GATE
     project.gate_decisions = [d for d in project.gate_decisions if d.gate not in (1, 2, 3)]
     project.client_decision = None
-    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN):
+    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS):
         if project.stage_status[s] is not StageStatus.PENDING:
             project.stage_status[s] = StageStatus.PENDING
     project.log(f"{cr.id} analysed: {len(cr.added)} added, {len(cr.changed)} changed, {len(cr.removed)} removed. "
@@ -517,4 +519,33 @@ def run_stage4(deps: Deps, project_id: str) -> Project:
     )
     deps.store.save(project)
     deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.DESIGN.value})
+    return project
+
+
+# ---------- Stage 5: skills setup (no gate of its own) ----------
+
+def run_stage5(deps: Deps, project_id: str) -> Project:
+    project = deps.store.load(project_id)
+    if project.stage_status[Stage.DESIGN] is not StageStatus.APPROVED:
+        raise RuntimeError("Gate 3 must approve the solution design before skills setup (Stage 5)")
+    _reset_from(project, Stage.SKILLS)
+    project.stage_status[Stage.SKILLS] = StageStatus.RUNNING
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_start", "stage": Stage.SKILLS.value})
+    try:
+        result = skills_setup.run(deps.llm_for(project.id, skills_setup.NAME), project)
+    except Exception as exc:
+        project.stage_status[Stage.SKILLS] = StageStatus.FAILED
+        project.log(f"Stage 5 failed: {exc!r}")
+        deps.store.save(project)
+        deps.tracer.record(project_id, {"type": "stage_failed", "stage": Stage.SKILLS.value, "error": repr(exc)})
+        raise
+    skills_setup.apply(project, result)
+    report = skills_setup.skills_check(project)
+    added = sum(len(v) for f in project.skill_pack.files for v in f.tailored.values())
+    project.stage_status[Stage.SKILLS] = StageStatus.DONE
+    project.log(f"Skill pack: {len(project.skill_pack.files)} skills, {added} project-specific rules added. "
+                + ("Skills check passed." if report.passed else f"Skills check: {'; '.join(report.failures)}"))
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.SKILLS.value})
     return project
