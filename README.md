@@ -37,6 +37,7 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Stage 5 skills setup: project skill pack from tech packs, tailored rules added, Claude Code SKILL.md layout | Working |
 | Stage 6 internal plan: tickets, dependencies, sprints, validation report, Jira CSV, tech lead review | Working (Jira by CSV import; placeholder key SDLC) |
 | Stage 7 build: developer agent per ticket, guarded git (feature branches, PRs into develop, secret scan), human merge per PR | Working on a local git host (GitHub host, sandbox and coding agent choice pending) |
+| Traceability matrix: requirement to input line, platform, estimate, design, ticket, pull request and tests; breaks flagged | Working |
 | Stages 8 and 9 | Later phases |
 
 ## Setup (macOS)

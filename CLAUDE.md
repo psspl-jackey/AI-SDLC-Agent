@@ -40,6 +40,8 @@ not new agents.
 - Done (branch `feature/stage7-build`, stacked): Stage 7 build loop (developer agent per ticket, GuardedGit rules,
   local git host with real branches and recorded pull requests, human merge unblocks dependents, failed tickets
   retried explicitly, handover when agent-scope tickets are merged).
+- Done (branch `feature/traceability-matrix`, stacked): traceability matrix (`traceability.py`, pure code): one row
+  per requirement from input line to pull request, chain breaks flagged per stage that has run; .xlsx and .md.
 - Next: pull a model and run the eval to tune prompts; GitHub host and sandbox for Stage 7 (needs decisions below);
   Stage 8 QA and release; rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.
@@ -95,6 +97,7 @@ not new agents.
 - `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design, skills_setup, planner, developer (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
 - `src/sdlc_agent/build/git_host.py` GitHost interface, GuardedGit rules, Fake and Local hosts; `orchestrator/build.py` Stage 7 loop
+- `src/sdlc_agent/traceability.py` requirement -> ... -> pull request matrix (no model)
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `tech_packs/*.yaml` (stacks Stage 4 may choose), `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`
 

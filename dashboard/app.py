@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 import streamlit as st
 
-from sdlc_agent import exports
+from sdlc_agent import exports, traceability
 from sdlc_agent.gaps.register import coverage_check, gate_status
 from sdlc_agent.intake.questionnaire import build_questionnaire
 from sdlc_agent.agents import estimator, planner
@@ -69,7 +69,8 @@ with st.sidebar:
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
                                    "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
-                                   "Design", "Gate 3 approval", "Skills", "Plan", "Build", "Change requests", "Deliverables",
+                                   "Design", "Gate 3 approval", "Skills", "Plan", "Build", "Traceability", "Change requests",
+                                   "Deliverables",
                                    "Trace and cost"])
 
 
@@ -468,6 +469,25 @@ def build_screen(project) -> None:
             st.rerun()
 
 
+def traceability_screen(project) -> None:
+    st.header("Traceability matrix")
+    st.write("Every requirement traced from its source to the code that delivers it: input lines, gaps, platforms, "
+             "estimate, design, tickets and pull requests. Breaks are shown only for stages that have run.")
+    s = traceability.summary(project)
+    c = st.columns(5)
+    c[0].metric("Delivered", s["delivered"])
+    c[1].metric("In review / build", s["in review"] + s["in build"])
+    c[2].metric("Planned", s["planned"])
+    c[3].metric("Chain breaks", s["breaks"])
+    c[4].metric("Unaccounted input lines", s["unaccounted_lines"])
+    d1, d2 = st.columns(2)
+    d1.download_button("Traceability matrix (.xlsx)", traceability.xlsx(project), file_name=f"{project.id}-traceability.xlsx")
+    d2.download_button("Traceability matrix (.md)", traceability.markdown(project), file_name=f"{project.id}-traceability.md")
+    only_breaks = st.toggle("Only requirements with a break")
+    rows = traceability.rows_for_table(project)
+    st.dataframe([r for r in rows if r["Breaks"] or not only_breaks], hide_index=True, width="stretch")
+
+
 def change_requests_screen(project) -> None:
     st.header("Change requests")
     st.write("A change re-enters at Stage 1: requirements are updated, Gate 1 opens again, and after approval "
@@ -594,6 +614,8 @@ def deliverables_screen(project) -> None:
                        disabled=project.skill_pack is None)
     st.download_button("Jira import (.csv)", exports.jira_csv(project), file_name=f"{project.id}-jira.csv",
                        disabled=project.plan is None, key="dl_jira")
+    st.download_button("Traceability matrix (.xlsx)", traceability.xlsx(project),
+                       file_name=f"{project.id}-traceability.xlsx", key="dl_trace")
     st.download_button("Sprint plan (.md)", exports.plan_markdown(project), file_name=f"{project.id}-plan.md",
                        disabled=project.plan is None, key="dl_plan")
 
@@ -622,7 +644,7 @@ else:
         "Gap register": gaps_screen, "Gate 1 approval": lambda p: gate_screen(p, 1), "Platforms": platforms_screen,
         "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
         "Design": design_screen, "Gate 3 approval": lambda p: gate_screen(p, 3), "Skills": skills_screen,
-        "Plan": plan_screen, "Build": build_screen,
+        "Plan": plan_screen, "Build": build_screen, "Traceability": traceability_screen,
         "Change requests": change_requests_screen,
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,
