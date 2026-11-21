@@ -1,0 +1,17 @@
+name: flutter
+title: Flutter (Dart)
+platforms: [android, ios]
+approach: cross_platform
+architecture:
+  - Feature-first folders; each feature has data, domain and presentation layers
+  - State management with Riverpod or Bloc; one approach per project, recorded in the decision record
+  - Repository pattern between UI and APIs; DTOs mapped to domain models
+  - Dependency injection at app start; environment config per flavour (dev, staging, prod)
+conventions:
+  - Effective Dart style; flutter analyze and dart format clean before every pull request
+  - Strings in ARB files from day one, even for one language
+security:
+  - Tokens in secure storage (Keychain / Keystore), never in shared preferences
+  - Certificate pinning for production APIs; no secrets in the app bundle
+testing:
+  - Unit tests for domain and repositories; widget tests for key screens; integration tests for main flows

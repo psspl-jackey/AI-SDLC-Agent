@@ -1,0 +1,15 @@
+name: kotlin_android
+title: Native Android (Kotlin, Jetpack Compose)
+platforms: [android]
+approach: native
+architecture:
+  - MVVM with a unidirectional data flow; ViewModel per screen, StateFlow for UI state
+  - Clean layering (data, domain, ui) with Hilt for dependency injection
+  - Retrofit and OkHttp for APIs; Room for local storage where offline support is needed
+conventions:
+  - Kotlin coding conventions; ktlint and detekt clean before every pull request
+  - Compose previews for every reusable component
+security:
+  - Tokens in EncryptedSharedPreferences or DataStore with Keystore; R8 enabled for release
+testing:
+  - JUnit and MockK for view models and repositories; Compose UI tests for main flows

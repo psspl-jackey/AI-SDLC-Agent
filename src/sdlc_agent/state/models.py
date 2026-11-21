@@ -283,6 +283,59 @@ class ChangeRequest(BaseModel):
         return set(self.added) | set(self.changed) | set(self.removed)
 
 
+class StackChoice(BaseModel):
+    platform: str
+    pack: str  # tech pack name (tech_packs/<pack>.yaml)
+    reason: str = ""
+    alternatives: list[str] = Field(default_factory=list)
+
+
+class Component(BaseModel):
+    name: str
+    kind: Literal["client", "service", "datastore", "external"] = "service"
+    responsibility: str = ""
+    uses: list[str] = Field(default_factory=list)  # names of other components
+
+
+class Entity(BaseModel):
+    name: str
+    fields: list[str] = Field(default_factory=list)
+    requirement_ids: list[str] = Field(default_factory=list)
+
+
+class ApiEndpoint(BaseModel):
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
+    path: str
+    purpose: str = ""
+    requirement_ids: list[str] = Field(default_factory=list)
+
+
+class Screen(BaseModel):
+    id: str  # SCR-001
+    platform: str  # android, ios, web, admin_panel; "mobile" when android and ios share the screens
+    name: str
+    purpose: str = ""
+    requirement_ids: list[str] = Field(default_factory=list)
+    navigates_to: list[str] = Field(default_factory=list)  # screen ids
+
+
+class DesignDecision(BaseModel):
+    title: str
+    decision: str
+    reason: str = ""
+    alternatives: list[str] = Field(default_factory=list)
+
+
+class SolutionDesign(BaseModel):
+    stacks: list[StackChoice] = Field(default_factory=list)
+    components: list[Component] = Field(default_factory=list)
+    entities: list[Entity] = Field(default_factory=list)
+    endpoints: list[ApiEndpoint] = Field(default_factory=list)
+    screens: list[Screen] = Field(default_factory=list)
+    decisions: list[DesignDecision] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=now)
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -300,6 +353,7 @@ class Project(BaseModel):
     platform_matrix: Optional[PlatformMatrix] = None  # Stage 2
     estimate: Optional[Estimate] = None  # Stage 3
     client_decision: Optional[ClientDecision] = None  # after Gate 2
+    design: Optional[SolutionDesign] = None  # Stage 4
     change_requests: list[ChangeRequest] = Field(default_factory=list)
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(

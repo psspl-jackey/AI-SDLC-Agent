@@ -1,4 +1,4 @@
-"""Dashboard v1 for the AI SDLC Agent (intake through Stage 3 estimate and Gate 2).
+"""Dashboard v1 for the AI SDLC Agent (intake through Stage 4 solution design and Gate 3).
 
 Run from the repo root:  streamlit run dashboard/app.py
 """
@@ -16,7 +16,7 @@ from sdlc_agent.agents import estimator
 from sdlc_agent.agents.platform_decision import platform_check
 from sdlc_agent.orchestrator import (
     Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
-    run_stage2, run_stage3, start_intake, submit_change_request,
+    run_stage2, run_stage3, run_stage4, start_intake, submit_change_request,
 )
 from sdlc_agent.orchestrator.pipeline import GATE_STAGE
 from sdlc_agent.questions.queue import answer_question, open_questions
@@ -68,7 +68,8 @@ with st.sidebar:
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
                                    "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
-                                   "Change requests", "Deliverables", "Trace and cost"])
+                                   "Design", "Gate 3 approval", "Change requests", "Deliverables",
+                                   "Trace and cost"])
 
 
 # ---------- new project ----------
@@ -237,6 +238,8 @@ GATE_TEXT = {
     2: ("Approve the platform matrix and the estimate, including the recommended additions offered to the "
         "client. Client approval of the proposal follows once the proposal document is produced.",
         "Platform and estimate checks"),
+    3: ("Approve the stacks, architecture, data model, API and screens before skills setup and planning.",
+        "Design check"),
 }
 
 
@@ -295,6 +298,28 @@ def client_decision_section(project) -> None:
     if c2.button("Record client rejection"):
         record_client_decision(deps, project, False, [], note)
         st.rerun()
+
+
+def design_screen(project) -> None:
+    st.header("Stage 4: solution design")
+    st.write("Stack per platform from the tech packs, components, data model, API, and screens with their flows. "
+             "Every requirement must reach a screen or an API endpoint. Approved at Gate 3.")
+    cd = project.client_decision
+    ready = project.stage_status[Stage.PROPOSAL] is StageStatus.APPROVED and cd is not None and cd.approved
+    if not ready:
+        st.info("The proposal must be approved at Gate 2 and by the client first.")
+    label = "Run Stage 4" if project.design is None else "Run Stage 4 again"
+    if st.button(label, type="primary", disabled=not ready):
+        with st.spinner("Designing the solution"):
+            try:
+                run_stage4(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        st.rerun()
+    if project.design is None:
+        return
+    st.markdown(exports.architecture_markdown(project))
 
 
 def change_requests_screen(project) -> None:
@@ -417,6 +442,8 @@ def deliverables_screen(project) -> None:
                        disabled=project.estimate is None)
     st.download_button("Estimate summary (.md)", exports.estimate_markdown(project),
                        file_name=f"{project.id}-estimate.md", disabled=project.estimate is None)
+    st.download_button("Architecture document (.md)", exports.architecture_markdown(project),
+                       file_name=f"{project.id}-architecture.md", disabled=project.design is None)
 
 
 def trace_screen(project) -> None:
@@ -442,6 +469,7 @@ else:
         "Overview": overview, "Questions": questions_screen, "Requirements": requirements_screen,
         "Gap register": gaps_screen, "Gate 1 approval": lambda p: gate_screen(p, 1), "Platforms": platforms_screen,
         "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
+        "Design": design_screen, "Gate 3 approval": lambda p: gate_screen(p, 3),
         "Change requests": change_requests_screen,
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,

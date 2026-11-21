@@ -1,0 +1,13 @@
+name: python_fastapi_backend
+title: Python backend (FastAPI, PostgreSQL)
+platforms: [backend]
+approach: backend
+architecture:
+  - Modular monolith: one router package per domain area; OpenAPI generated from the code
+  - PostgreSQL with Alembic migrations; Pydantic models for every request and response
+conventions:
+  - Ruff and mypy clean before every pull request; one migration per schema change
+security:
+  - OAuth2 password or OTP flow issuing JWTs; input validation by Pydantic; rate limiting on auth
+testing:
+  - pytest with a test database; API tests for every endpoint

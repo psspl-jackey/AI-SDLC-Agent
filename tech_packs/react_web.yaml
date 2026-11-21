@@ -1,0 +1,13 @@
+name: react_web
+title: React web app (TypeScript, Vite)
+platforms: [web, admin_panel]
+approach: web
+architecture:
+  - Single-page app; React Router; React Query for server state
+  - Component library shared across screens; forms with schema validation
+conventions:
+  - TypeScript strict mode; ESLint and Prettier clean before every pull request
+security:
+  - Tokens in httpOnly cookies set by the backend; CSP headers; role checks on every admin route
+testing:
+  - Vitest and Testing Library for components; Playwright for main flows

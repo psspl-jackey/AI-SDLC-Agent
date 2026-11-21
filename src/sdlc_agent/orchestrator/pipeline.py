@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from ..agents import domain_research, estimator, platform_decision, requirements_analyst, reviewer
+from ..agents import domain_research, estimator, platform_decision, requirements_analyst, reviewer, solution_design
 from ..config import Settings, get_settings
 from ..gaps.register import add_gap, coverage_check, gate_passed, gate_status
 from ..intake.brief import apply_intake_answers, build_brief, completeness_of, extract_sow_lines
@@ -196,7 +196,7 @@ def run_stage1(deps: Deps, project_id: str) -> Project:
 
 # ---------- Gates ----------
 
-GATE_STAGE = {1: Stage.REQUIREMENTS, 2: Stage.PROPOSAL}
+GATE_STAGE = {1: Stage.REQUIREMENTS, 2: Stage.PROPOSAL, 3: Stage.DESIGN}
 
 
 def gate_failures(project: Project, gate: int) -> list[str]:
@@ -205,6 +205,8 @@ def gate_failures(project: Project, gate: int) -> list[str]:
         return coverage_check(project).failures
     if gate == 2:
         return platform_decision.platform_check(project).failures + estimator.estimate_check(project).failures
+    if gate == 3:
+        return solution_design.design_check(project).failures
     raise ValueError(f"Unknown gate {gate}")
 
 
@@ -235,7 +237,7 @@ def decide_gate1(deps: Deps, project: Project, role: str, approved: bool, commen
 
 def _reset_from(project: Project, stage: Stage) -> None:
     """A stage re-runs on new inputs, so everything after it must run again."""
-    order = [Stage.PLATFORM, Stage.PROPOSAL]
+    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN]
     for s in order[order.index(stage):] if stage in order else []:
         project.stage_status[s] = StageStatus.PENDING
         if s is Stage.PLATFORM:
@@ -244,6 +246,9 @@ def _reset_from(project: Project, stage: Stage) -> None:
             project.estimate = None
             project.client_decision = None
             project.gate_decisions = [d for d in project.gate_decisions if d.gate != 2]
+        if s is Stage.DESIGN:
+            project.design = None
+            project.gate_decisions = [d for d in project.gate_decisions if d.gate != 3]
 
 
 def _supersede_pending_change(project: Project, by: str) -> None:
@@ -420,9 +425,9 @@ def submit_change_request(deps: Deps, project_id: str, text: str) -> Project:
     project.change_requests.append(cr)
 
     project.stage_status[Stage.REQUIREMENTS] = StageStatus.WAITING_GATE
-    project.gate_decisions = [d for d in project.gate_decisions if d.gate not in (1, 2)]
+    project.gate_decisions = [d for d in project.gate_decisions if d.gate not in (1, 2, 3)]
     project.client_decision = None
-    for s in (Stage.PLATFORM, Stage.PROPOSAL):
+    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN):
         if project.stage_status[s] is not StageStatus.PENDING:
             project.stage_status[s] = StageStatus.PENDING
     project.log(f"{cr.id} analysed: {len(cr.added)} added, {len(cr.changed)} changed, {len(cr.removed)} removed. "
@@ -477,4 +482,39 @@ def apply_change_request(deps: Deps, project_id: str) -> Project:
         project.log(f"{cr.id} applied to the requirements; later stages have not run yet.")
     cr.status, cr.applied_at = "applied", now()
     deps.store.save(project)
+    return project
+
+
+# ---------- Stage 4: solution design, then Gate 3 ----------
+
+def run_stage4(deps: Deps, project_id: str) -> Project:
+    project = deps.store.load(project_id)
+    if project.stage_status[Stage.PROPOSAL] is not StageStatus.APPROVED or not (
+        project.client_decision and project.client_decision.approved
+    ):
+        raise RuntimeError("The proposal must be approved at Gate 2 and by the client before solution design (Stage 4)")
+    _reset_from(project, Stage.DESIGN)
+    project.stage_status[Stage.DESIGN] = StageStatus.RUNNING
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_start", "stage": Stage.DESIGN.value})
+    try:
+        result = solution_design.run(deps.llm_for(project.id, solution_design.NAME), project)
+    except Exception as exc:
+        project.stage_status[Stage.DESIGN] = StageStatus.FAILED
+        project.log(f"Stage 4 failed: {exc!r}")
+        deps.store.save(project)
+        deps.tracer.record(project_id, {"type": "stage_failed", "stage": Stage.DESIGN.value, "error": repr(exc)})
+        raise
+    solution_design.apply(project, result)
+    d = project.design
+    failures = gate_failures(project, 3)
+    project.stage_status[Stage.DESIGN] = StageStatus.WAITING_GATE
+    project.log(
+        f"Solution design: stacks {', '.join(f'{s.platform}={s.pack}' for s in d.stacks)}; {len(d.components)} "
+        f"components, {len(d.entities)} entities, {len(d.endpoints)} endpoints, {len(d.screens)} screens. "
+        + ("Gate 3 is open for approval." if not failures
+           else f"{len(failures)} check issue(s) to fix before Gate 3 can be approved.")
+    )
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.DESIGN.value})
     return project

@@ -187,3 +187,57 @@ def estimate_xlsx(p: Project) -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def _node(name: str) -> str:
+    return "n_" + "".join(ch if ch.isalnum() else "_" for ch in name)
+
+
+def architecture_markdown(p: Project) -> str:
+    """Architecture document and stack decision record, with Mermaid diagrams (render on GitHub)."""
+    from .agents.solution_design import GROUP_LABELS, design_check
+    from .domain_packs import load_tech_packs
+
+    d = p.design
+    out = [f"# Architecture: {p.name}", ""]
+    if d is None:
+        return "\n".join(out + ["Stage 4 has not run yet."]) + "\n"
+    packs = load_tech_packs()
+    out += ["## Stack decision record", "", "| Platform | Stack | Reason | Alternatives |", "| --- | --- | --- | --- |"]
+    for s in d.stacks:
+        title = packs.get(s.pack, {}).get("title", f"{s.pack} (no tech pack)")
+        out.append(f"| {s.platform.replace('_', ' ')} | {title} | {s.reason} | {', '.join(s.alternatives)} |")
+    if d.decisions:
+        out += ["", "## Design decisions", ""]
+        for i, dec in enumerate(d.decisions, start=1):
+            out.append(f"{i}. **{dec.title}**: {dec.decision}. {dec.reason}"
+                       + (f" Alternatives considered: {', '.join(dec.alternatives)}." if dec.alternatives else ""))
+    out += ["", "## Components", "", "```mermaid", "flowchart LR"]
+    shape = {"client": ("[", "]"), "service": ("(", ")"), "datastore": ("[(", ")]"), "external": ("{{", "}}")}
+    for c in d.components:
+        o, cl = shape[c.kind]
+        out.append(f'    {_node(c.name)}{o}"{c.name}"{cl}')
+    out += [f"    {_node(c.name)} --> {_node(u)}" for c in d.components for u in c.uses]
+    out += ["```", ""]
+    out += [f"- **{c.name}** ({c.kind}): {c.responsibility}" for c in d.components]
+    if d.entities:
+        out += ["", "## Data model", "", "| Entity | Fields | Requirements |", "| --- | --- | --- |"]
+        out += [f"| {e.name} | {', '.join(e.fields)} | {', '.join(e.requirement_ids)} |" for e in d.entities]
+    if d.endpoints:
+        out += ["", "## API", "", "| Method | Path | Purpose | Requirements |", "| --- | --- | --- | --- |"]
+        out += [f"| {e.method} | `{e.path}` | {e.purpose} | {', '.join(e.requirement_ids)} |" for e in d.endpoints]
+    groups = list(dict.fromkeys(s.platform for s in d.screens))
+    if groups:
+        out += ["", "## Screens and flows", ""]
+    for g in groups:
+        screens = [s for s in d.screens if s.platform == g]
+        out += [f"### {GROUP_LABELS.get(g, g).capitalize()}", "", "```mermaid", "flowchart TD"]
+        out += [f'    {s.id.replace("-", "_")}["{s.name}"]' for s in screens]
+        out += [f'    {s.id.replace("-", "_")} --> {t.replace("-", "_")}' for s in screens for t in s.navigates_to]
+        out += ["```", ""]
+        out += [f"- **{s.id} {s.name}**: {s.purpose} _({', '.join(s.requirement_ids) or 'no requirement'})_" for s in screens]
+        out.append("")
+    report = design_check(p)
+    out += ["## Design check", "", "Passed." if report.passed else "Failed:"]
+    out += [f"- {f}" for f in report.failures]
+    return "\n".join(out) + "\n"

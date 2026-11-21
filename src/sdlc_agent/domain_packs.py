@@ -22,3 +22,11 @@ def match_pack(domain: str, packs: dict[str, dict] | None = None) -> tuple[str, 
         if any(a.lower() in d or d in a.lower() for a in names):
             return name, pack
     return None
+
+
+TECH_PACK_DIR = Path(__file__).resolve().parents[2] / "tech_packs"
+
+
+def load_tech_packs(pack_dir: Path = TECH_PACK_DIR) -> dict[str, dict]:
+    """Tech packs: the stacks Stage 4 may choose from, with the rules developers follow."""
+    return {p.stem: yaml.safe_load(p.read_text(encoding="utf-8")) for p in sorted(pack_dir.glob("*.yaml"))}

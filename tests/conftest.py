@@ -113,6 +113,37 @@ class FakeLLM:
                 "gaps": [{"source": "sow", "description": "Photo size limit not given", "question": "Max photo size?",
                           "blocking": False, "assumed_answer": "5 MB each"}],
             }
+        elif "technical architect" in system:
+            req_ids = sorted(set(re.findall(r"^(REQ-\d+)", prompt, re.MULTILINE)))
+            if "Tech pack catalogue" in prompt:
+                data = {
+                    "stacks": [{"platform": "android", "pack": "flutter", "reason": "One codebase"},
+                               {"platform": "iOS", "pack": "flutter", "reason": "One codebase"},
+                               {"platform": "admin panel", "pack": "react_web", "reason": "Internal tool"},
+                               {"platform": "backend", "pack": "nodejs_backend", "reason": "Team skills"}],
+                    "components": [
+                        {"name": "Mobile app", "kind": "client", "responsibility": "Buyers and sellers", "uses": ["API"]},
+                        {"name": "Admin panel", "kind": "client", "responsibility": "Moderation", "uses": ["API"]},
+                        {"name": "API", "kind": "service", "responsibility": "Business logic",
+                         "uses": ["Database", "Ghost service"]},
+                        {"name": "Database", "kind": "datastore", "responsibility": "Ads and users"},
+                    ],
+                    "decisions": [{"title": "Backend style", "decision": "Modular monolith",
+                                   "reason": "Small team", "alternatives": ["Microservices"]}],
+                }
+            elif "data model" in prompt:
+                data = {
+                    "entities": [{"name": "Ad", "fields": ["id", "title", "price", "photos"], "requirement_ids": req_ids}],
+                    "endpoints": [{"method": "post", "path": "ads", "purpose": "Create an ad", "requirement_ids": req_ids},
+                                  {"method": "POST", "path": "/ads", "purpose": "duplicate", "requirement_ids": []},
+                                  {"method": "FETCH", "path": "/x", "purpose": "bad", "requirement_ids": []}],
+                }
+            else:
+                data = {"screens": [
+                    {"key": "S1", "name": "Home", "purpose": "Browse ads", "requirement_ids": [], "navigates_to": ["S2", "S9"]},
+                    {"key": "S2", "name": "Post ad", "purpose": "Create an ad", "requirement_ids": req_ids,
+                     "navigates_to": ["S1"]},
+                ]}
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:

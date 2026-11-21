@@ -1,0 +1,13 @@
+name: java_spring_backend
+title: Java backend (Spring Boot, PostgreSQL)
+platforms: [backend]
+approach: backend
+architecture:
+  - Modular monolith with one package per domain area; REST controllers documented with OpenAPI
+  - PostgreSQL with Flyway migrations; Spring Data JPA repositories
+conventions:
+  - Checkstyle or Spotless clean before every pull request; one migration per schema change
+security:
+  - Spring Security with JWT; Bean Validation on every request; rate limiting on auth
+testing:
+  - JUnit 5 and Mockito for services; Testcontainers-based API tests

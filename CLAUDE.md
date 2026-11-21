@@ -31,7 +31,9 @@ not new agents.
   lines, change analyst adds/changes/removes requirements with stable ids, Gate 1 reopens, then only affected
   requirements are re-mapped and re-estimated).
 - Done (branch `feature/llm-json-hardening`, stacked): JSON retry and shape coercion for every model call.
-- Next: pull a model and run the eval to tune prompts; rate card for team plan, timeline and cost; proposal doc and
+- Done (branch `feature/stage4-solution-design`, stacked): Stage 4 solution design (stacks from tech packs,
+  components, data model, API, screens and flows), architecture doc with Mermaid diagrams, Gate 3.
+- Next: pull a model and run the eval to tune prompts; Stage 5 skills setup (tailor tech packs into a project skill pack); rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.
 
 ## Decisions already made (do not re-ask)
@@ -53,6 +55,7 @@ not new agents.
 | Skills library owners | Tech lead and delivery head |
 | Past SOWs | None available; use sample inputs with planted gaps and answer keys (`samples/`) |
 | Monthly LLM budget | Unknown; measure with the cost meter during the demo |
+| Tech packs | v1 written by Claude Code (Flutter, React Native, Kotlin, Swift, React, Next.js, NestJS, FastAPI, Spring); tech lead to review and own |
 | Estimate risk buffer | 15% default (`RISK_BUFFER_PCT` in .env), reviewed at Gate 2; placeholder until there is effort history |
 
 ## Rules that must hold in code
@@ -79,10 +82,10 @@ not new agents.
 - `src/sdlc_agent/llm/` model interface (Ollama, Anthropic)
 - `src/sdlc_agent/state/` Project model and store
 - `src/sdlc_agent/intake/` detect input, readers, brief, questionnaire
-- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst (run() is pure, apply() merges)
+- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
-- `domain_packs/*.yaml`, `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`
+- `domain_packs/*.yaml`, `tech_packs/*.yaml` (stacks Stage 4 may choose), `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`
 
 ## Commands
 

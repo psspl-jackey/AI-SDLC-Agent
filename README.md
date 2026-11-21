@@ -32,7 +32,9 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Client decision: approve or reject, opt into recommended additions | Working |
 | Change requests: re-enter at Stage 1, re-estimate only affected requirements | Working |
 | Proposal doc and PPT in company templates | Waiting for template files |
-| Stages 4 to 9 | Later phases |
+| Stage 4 solution design: stacks from tech packs, components, data model, API, screens and flows; architecture doc with diagrams | Working (wireframes as screen lists, not drawings) |
+| Gate 3 approval by all three roles, blocked while the design check fails | Working |
+| Stages 5 to 9 | Later phases |
 
 ## Setup (macOS)
 
@@ -109,6 +111,7 @@ src/sdlc_agent/
   exports.py             requirements doc, gap register, competitor matrix, questions
   evals.py               score Stage 0-1 output against sample answer keys
 domain_packs/            feature checklists and compliance prompts per domain
+tech_packs/              stacks Stage 4 may choose, with architecture, security and testing rules
 skills/                  reusable instructions for agents (NFR checklist)
 dashboard/               Streamlit dashboard
 samples/                 sample inputs and answer keys for the eval set
