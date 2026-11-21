@@ -15,11 +15,12 @@ from sdlc_agent.intake.questionnaire import build_questionnaire
 from sdlc_agent.agents import estimator
 from sdlc_agent.agents.platform_decision import platform_check
 from sdlc_agent.orchestrator import (
-    Deps, decide_gate, finish_intake, gate_failures, run_stage1, run_stage2, run_stage3, start_intake,
+    Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
+    run_stage2, run_stage3, start_intake, submit_change_request,
 )
 from sdlc_agent.orchestrator.pipeline import GATE_STAGE
 from sdlc_agent.questions.queue import answer_question, open_questions
-from sdlc_agent.state.models import GATE_APPROVERS, RawInput, Stage, StageStatus
+from sdlc_agent.state.models import GATE_APPROVERS, GapStatus, RawInput, Stage, StageStatus
 
 st.set_page_config(page_title="AI SDLC Agent", layout="wide")
 
@@ -67,7 +68,7 @@ with st.sidebar:
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
                                    "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
-                                   "Deliverables", "Trace and cost"])
+                                   "Change requests", "Deliverables", "Trace and cost"])
 
 
 # ---------- new project ----------
@@ -267,6 +268,69 @@ def gate_screen(project, gate: int) -> None:
     if c2.button("Reject", disabled=not waiting):
         decide_gate(deps, project, gate, role, False, comment)
         st.rerun()
+    if gate == 2:
+        client_decision_section(project)
+
+
+def client_decision_section(project) -> None:
+    st.subheader("Client decision")
+    cd = project.client_decision
+    if cd is not None:
+        st.write(f"**{'Approved' if cd.approved else 'Rejected'}** by the client on {cd.decided_at:%Y-%m-%d}. "
+                 f"Opted into: {', '.join(cd.opted_in_gap_ids) or 'no additions'}. {cd.comment}")
+        return
+    if project.stage_status[Stage.PROPOSAL] is not StageStatus.APPROVED:
+        st.caption("Recorded here once tech lead, delivery head and sales have approved Gate 2.")
+        return
+    offered = [g for g in project.gaps if g.status is GapStatus.RECOMMENDED]
+    hours = estimator.totals(project.estimate.additions(), "gap_id") if project.estimate else {}
+    labels = {f"{g.id}: {g.description} ({hours[g.id].expected:.0f} h)" if g.id in hours else f"{g.id}: {g.description}": g.id
+              for g in offered}
+    picked = st.multiselect("Recommended additions the client opted into", list(labels))
+    note = st.text_area("Client comment", key="client_comment")
+    c1, c2 = st.columns(2)
+    if c1.button("Record client approval", type="primary"):
+        record_client_decision(deps, project, True, [labels[x] for x in picked], note)
+        st.rerun()
+    if c2.button("Record client rejection"):
+        record_client_decision(deps, project, False, [], note)
+        st.rerun()
+
+
+def change_requests_screen(project) -> None:
+    st.header("Change requests")
+    st.write("A change re-enters at Stage 1: requirements are updated, Gate 1 opens again, and after approval "
+             "only the affected requirements are re-mapped to platforms and re-estimated.")
+    pending = next((c for c in project.change_requests if c.status == "analysed"), None)
+    if pending is None:
+        text = st.text_area("Describe the change", placeholder="e.g. Sellers should be able to mark ads as sold")
+        if st.button("Analyse change request", type="primary", disabled=not text.strip()):
+            with st.spinner("Analysing the change"):
+                try:
+                    submit_change_request(deps, project.id, text)
+                except Exception as exc:
+                    st.error(friendly_error(exc))
+                    return
+            st.rerun()
+    else:
+        st.info(f"{pending.id} is analysed. Approve Gate 1 again, then apply it to update platforms and the estimate.")
+        gate1_ok = project.stage_status[Stage.REQUIREMENTS] is StageStatus.APPROVED
+        if st.button(f"Apply {pending.id}", type="primary", disabled=not gate1_ok):
+            with st.spinner("Re-estimating the affected work"):
+                try:
+                    apply_change_request(deps, project.id)
+                except Exception as exc:
+                    st.error(friendly_error(exc))
+                    return
+            st.rerun()
+    reqs = {r.id: r for r in project.requirements}
+    for cr in reversed(project.change_requests):
+        with st.container(border=True):
+            st.write(f"**{cr.id}** · {cr.status} · received {cr.received_at:%Y-%m-%d %H:%M}")
+            st.write(cr.text)
+            for label, ids in (("Added", cr.added), ("Changed", cr.changed), ("Removed", cr.removed)):
+                for rid in ids:
+                    st.write(f"- {label} **{rid}**: {reqs[rid].text if rid in reqs else ''}")
 
 
 def estimate_screen(project) -> None:
@@ -378,6 +442,7 @@ else:
         "Overview": overview, "Questions": questions_screen, "Requirements": requirements_screen,
         "Gap register": gaps_screen, "Gate 1 approval": lambda p: gate_screen(p, 1), "Platforms": platforms_screen,
         "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
+        "Change requests": change_requests_screen,
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,
     }[page](current)

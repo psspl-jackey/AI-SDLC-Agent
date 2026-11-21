@@ -23,11 +23,21 @@ def requirements_markdown(p: Project) -> str:
             f"**Input completeness:** {b.completeness.value}", "",
         ]
     out += ["## Functional requirements", ""]
-    out += [f"- **{r.id}** {r.text} _(source: {r.source.label()})_" for r in p.requirements if r.kind == "functional"]
+    out += [f"- **{r.id}** {r.text} _(source: {r.source.label()})_" for r in p.active_requirements() if r.kind == "functional"]
     out += ["", "## Non-functional requirements", ""]
-    out += [f"- **{r.id}** {r.text} _(source: {r.source.label()})_" for r in p.requirements if r.kind == "nfr"]
+    out += [f"- **{r.id}** {r.text} _(source: {r.source.label()})_" for r in p.active_requirements() if r.kind == "nfr"]
     out += ["", "## Assumptions", ""]
     out += [f"- **{a.id}** {a.text}" + (f" (for {a.related_gap_id})" if a.related_gap_id else "") for a in p.assumptions]
+    removed = [r for r in p.requirements if not r.active]
+    if removed:
+        out += ["", "## Removed by change requests", ""]
+        out += [f"- ~~**{r.id}** {r.text}~~ (removed by {r.removed_by})" for r in removed]
+    if p.change_requests:
+        out += ["", "## Change requests", ""]
+        for cr in p.change_requests:
+            parts = [f"{label} {', '.join(ids)}" for label, ids in
+                     (("added", cr.added), ("changed", cr.changed), ("removed", cr.removed)) if ids]
+            out.append(f"- **{cr.id}** ({cr.status}): {cr.text} _({'; '.join(parts) or 'no requirement changes'})_")
     rec = [g for g in p.gaps if g.status and g.status.value == "recommended"]
     out += ["", "## Recommended additions (optional, estimated separately)", ""]
     out += [f"- **{g.id}** {g.description}" for g in rec]
@@ -87,7 +97,7 @@ def platform_matrix_markdown(p: Project) -> str:
         out.append(f"| {d.platform.replace('_', ' ')} | {'yes' if d.included else 'no'} | {d.source} | "
                    f"{d.reason} | {', '.join(d.requirement_ids)} |")
     out += ["", f"**Delivery approach:** {m.approach.replace('_', ' ')}. {m.approach_reason}", ""]
-    unserved = [r for r in p.requirements if r.kind == "functional"
+    unserved = [r for r in p.active_requirements() if r.kind == "functional"
                 and not any(r.id in d.requirement_ids for d in m.included())]
     if unserved:
         out += ["## Requirements not served by any included platform", ""]

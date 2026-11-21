@@ -92,13 +92,27 @@ class FakeLLM:
                 ]}
             else:
                 platform = re.search(r"Estimate the (.+?) work", prompt).group(1)
+                listed = prompt.split("requirements:\n", 1)[1].split("\n\nNon-functional", 1)[0]
+                req_ids = re.findall(r"^(REQ-\d+):", listed, re.MULTILINE)
                 data = {"tasks": [
                     {"module": "Ads", "feature": "Post an ad", "title": f"Post-ad flow ({platform})",
                      "role": "developer", "hours_min": 24, "hours_likely": 16, "hours_max": 40,  # unordered on purpose
-                     "requirement_ids": ["REQ-001"]},
+                     "requirement_ids": req_ids},
                     {"module": "Ads", "feature": "Post an ad", "title": "Broken row", "role": "developer",
-                     "hours_min": 0, "hours_likely": 0, "hours_max": 0, "requirement_ids": ["REQ-001"]},
+                     "hours_min": 0, "hours_likely": 0, "hours_max": 0, "requirement_ids": req_ids},
                 ]}
+        elif "change request" in system:
+            cr_line = re.search(r"lines:\n(L-\d+):", prompt).group(1)
+            data = {
+                "added": [{"text": "Sellers can mark an ad as sold", "kind": "functional", "line_ids": [cr_line],
+                           "platforms": ["Android", "iOS", "Smart TV"]}],
+                "changed": [{"id": "REQ-001", "text": "Sellers can post an ad with up to 20 photos",
+                             "line_ids": [cr_line], "platforms": []}],
+                "removed": [],
+                "not_requirement_line_ids": [],
+                "gaps": [{"source": "sow", "description": "Photo size limit not given", "question": "Max photo size?",
+                          "blocking": False, "assumed_answer": "5 MB each"}],
+            }
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:

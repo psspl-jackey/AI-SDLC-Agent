@@ -26,8 +26,12 @@ not new agents.
 - Done (branch `feature/stage3-estimate`, stacked on Stage 2): Stage 3 estimator (tasks with min-likely-max hours,
   PERT totals and risk buffer computed in code, recommended additions estimated separately), estimate sheet
   (.xlsx), Gate 2 (three roles; blocked while platform or estimate checks fail).
+- Done (branch `feature/client-approval-change-requests`, stacked on Stage 3): client decision after internal
+  Gate 2 (opt-in additions become requirements, declined ones out of scope); change requests (text becomes input
+  lines, change analyst adds/changes/removes requirements with stable ids, Gate 1 reopens, then only affected
+  requirements are re-mapped and re-estimated).
 - Next: pull a model and run the eval to tune prompts; rate card for team plan, timeline and cost; proposal doc and
-  PPT once the Prakash Infotech templates arrive; client approval step after Gate 2.
+  PPT once the Prakash Infotech templates arrive.
 
 ## Decisions already made (do not re-ask)
 
@@ -72,7 +76,7 @@ not new agents.
 - `src/sdlc_agent/llm/` model interface (Ollama, Anthropic)
 - `src/sdlc_agent/state/` Project model and store
 - `src/sdlc_agent/intake/` detect input, readers, brief, questionnaire
-- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator (run() is pure, apply() merges)
+- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`

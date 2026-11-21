@@ -57,7 +57,7 @@ class Completeness(str, Enum):
 class SourceRef(BaseModel):
     """Where an item came from: a file and page, a URL, the intake form, or inferred by an agent."""
 
-    kind: Literal["file", "url", "intake", "inferred"]
+    kind: Literal["file", "url", "intake", "inferred", "change_request", "client_decision"]
     ref: str = ""
 
     def label(self) -> str:
@@ -112,6 +112,12 @@ class Requirement(BaseModel):
     kind: Literal["functional", "nfr"] = "functional"
     source: SourceRef
     sow_line_ids: list[str] = Field(default_factory=list)
+    changed_by: list[str] = Field(default_factory=list)  # change request ids that rewrote this requirement
+    removed_by: Optional[str] = None  # change request id that removed it; kept for traceability
+
+    @property
+    def active(self) -> bool:
+        return self.removed_by is None
 
 
 class GapSource(str, Enum):
@@ -240,13 +246,41 @@ class EstimateTask(BaseModel):
 class Estimate(BaseModel):
     tasks: list[EstimateTask] = Field(default_factory=list)
     risk_buffer_pct: float = 15.0
+    accepted_gap_ids: list[str] = Field(default_factory=list)  # additions the client opted into
+    declined_gap_ids: list[str] = Field(default_factory=list)  # additions the client did not take (kept for record)
     created_at: datetime = Field(default_factory=now)
 
     def base(self) -> list[EstimateTask]:
-        return [t for t in self.tasks if not t.recommended]
+        """Agreed scope: tasks for requirements, plus additions the client accepted."""
+        return [t for t in self.tasks if not t.recommended or t.gap_id in self.accepted_gap_ids]
 
     def additions(self) -> list[EstimateTask]:
-        return [t for t in self.tasks if t.recommended]
+        """Optional extras still on offer."""
+        return [t for t in self.tasks
+                if t.recommended and t.gap_id not in self.accepted_gap_ids and t.gap_id not in self.declined_gap_ids]
+
+
+class ClientDecision(BaseModel):
+    approved: bool
+    opted_in_gap_ids: list[str] = Field(default_factory=list)
+    comment: str = ""
+    decided_at: datetime = Field(default_factory=now)
+
+
+class ChangeRequest(BaseModel):
+    id: str  # CR-001
+    text: str
+    line_ids: list[str] = Field(default_factory=list)  # input lines created from the text
+    status: Literal["analysed", "applied"] = "analysed"
+    added: list[str] = Field(default_factory=list)  # requirement ids
+    changed: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    platforms: dict[str, list[str]] = Field(default_factory=dict)  # requirement id -> platforms (added/changed)
+    received_at: datetime = Field(default_factory=now)
+    applied_at: Optional[datetime] = None
+
+    def affected(self) -> set[str]:
+        return set(self.added) | set(self.changed) | set(self.removed)
 
 
 class Project(BaseModel):
@@ -265,11 +299,16 @@ class Project(BaseModel):
     competitors: list[dict] = Field(default_factory=list)  # [{name, url, features: [...], researched_on}]
     platform_matrix: Optional[PlatformMatrix] = None  # Stage 2
     estimate: Optional[Estimate] = None  # Stage 3
+    client_decision: Optional[ClientDecision] = None  # after Gate 2
+    change_requests: list[ChangeRequest] = Field(default_factory=list)
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(
         default_factory=lambda: {s: StageStatus.PENDING for s in Stage}
     )
     notes: list[str] = Field(default_factory=list)  # orchestrator log visible on the dashboard
+
+    def active_requirements(self) -> list[Requirement]:
+        return [r for r in self.requirements if r.active]
 
     def log(self, message: str) -> None:
         self.notes.append(f"{now():%Y-%m-%d %H:%M:%S} {message}")

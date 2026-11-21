@@ -28,7 +28,9 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Automatic competitor discovery by web search | Not yet (search provider not chosen) |
 | Stage 2 platform decision: platform matrix with reasons, code-enforced platform check | Working |
 | Stage 3 estimate: tasks with min-likely-max hours, totals and risk buffer in code, recommended additions separate, .xlsx sheet | Working (hours only; cost needs a rate card) |
-| Gate 2 approval by all three roles, blocked while checks fail | Working (client approval step to come) |
+| Gate 2 approval by all three roles, blocked while checks fail | Working |
+| Client decision: approve or reject, opt into recommended additions | Working |
+| Change requests: re-enter at Stage 1, re-estimate only affected requirements | Working |
 | Proposal doc and PPT in company templates | Waiting for template files |
 | Stages 4 to 9 | Later phases |
 

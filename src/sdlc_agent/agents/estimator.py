@@ -59,15 +59,17 @@ def _project_context(project: Project) -> str:
     )
 
 
-def run(llm: LLMClient, project: Project) -> dict:
+def run(llm: LLMClient, project: Project, only: set[str] | None = None) -> dict:
+    """Estimate the project. With `only` (requirement ids), estimate just those requirements' platform
+    work; cross-cutting work and recommended additions are left as they are (change requests)."""
     m = project.platform_matrix
-    reqs = {r.id: r for r in project.requirements}
-    nfrs = "\n".join(f"{r.id}: {r.text}" for r in project.requirements if r.kind == "nfr") or "(none)"
+    reqs = {r.id: r for r in project.active_requirements()}
+    nfrs = "\n".join(f"{r.id}: {r.text}" for r in project.active_requirements() if r.kind == "nfr") or "(none)"
     result: dict = {"platform_tasks": {}, "common_tasks": [], "addition_tasks": []}
     ctx = _project_context(project)
 
     for d in m.included():
-        served = [reqs[i] for i in d.requirement_ids if i in reqs]
+        served = [reqs[i] for i in d.requirement_ids if i in reqs and (only is None or i in only)]
         if not served:
             continue
         listing = "\n".join(f"{r.id}: {r.text}" for r in served)
@@ -79,9 +81,12 @@ def run(llm: LLMClient, project: Project) -> dict:
         ).text)
         result["platform_tasks"][d.platform] = data.get("tasks", []) or []
 
+    if only is not None:
+        return result
+
     data = parse_json(llm.complete(
         SYSTEM,
-        f"{ctx}\nRequirements:\n" + "\n".join(f"{r.id}: {r.text}" for r in project.requirements)
+        f"{ctx}\nRequirements:\n" + "\n".join(f"{r.id}: {r.text}" for r in project.active_requirements())
         + f"\n\n{COMMON_ASK}\n\n" + TASK_SCHEMA % "",
         json_mode=True,
     ).text)
@@ -112,9 +117,11 @@ def _hours(item: dict) -> tuple[float, float, float] | None:
     return lo, mid, hi
 
 
-def build_estimate(project: Project, result: dict, risk_buffer_pct: float) -> tuple[Estimate, list[str]]:
+def build_estimate(
+    project: Project, result: dict, risk_buffer_pct: float, existing_ids: tuple[str, ...] = ()
+) -> tuple[Estimate, list[str]]:
     notes: list[str] = []
-    req_ids = {r.id for r in project.requirements}
+    req_ids = {r.id for r in project.active_requirements()}
     included = {d.platform for d in project.platform_matrix.included()}
     additions = {g.id for g in project.gaps if g.status is GapStatus.RECOMMENDED}
     tasks: list[EstimateTask] = []
@@ -130,7 +137,7 @@ def build_estimate(project: Project, result: dict, risk_buffer_pct: float) -> tu
         if [float(item[k]) for k in ("hours_min", "hours_likely", "hours_max")] != list(hours):
             notes.append(f"Estimator: reordered hours for \"{title}\" so min <= likely <= max")
         tasks.append(EstimateTask(
-            id=next_id("TASK", (t.id for t in tasks)),
+            id=next_id("TASK", [*existing_ids, *(t.id for t in tasks)]),
             module=str(item.get("module") or "General").strip(),
             feature=str(item.get("feature") or title).strip(),
             title=title,
@@ -220,7 +227,7 @@ def estimate_check(project: Project) -> EstimateReport:
         failures.append("The estimate has no tasks")
     covered = {rid for t in e.base() for rid in t.requirement_ids}
     failures += [f"{r.id} has no estimated task: \"{r.text[:80]}\""
-                 for r in project.requirements if r.kind == "functional" and r.id not in covered]
+                 for r in project.active_requirements() if r.kind == "functional" and r.id not in covered]
     estimated = {t.gap_id for t in e.additions()}
     failures += [f"Recommended addition {g.id} is not estimated: \"{g.description[:80]}\""
                  for g in project.gaps if g.status is GapStatus.RECOMMENDED and g.id not in estimated]

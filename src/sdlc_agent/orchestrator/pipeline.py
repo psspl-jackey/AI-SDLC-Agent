@@ -174,6 +174,7 @@ def run_stage1(deps: Deps, project_id: str) -> Project:
     project.questions, project.competitors = [], []
     # Later stages were built on the old requirements, so they must run again after the new Gate 1.
     _reset_from(project, Stage.PLATFORM)
+    _supersede_pending_change(project, "Stage 1")
     for line in project.sow_lines:
         line.requirement_ids, line.not_a_requirement = [], False
     project.gate_decisions = [d for d in project.gate_decisions if d.gate != 1]
@@ -241,7 +242,18 @@ def _reset_from(project: Project, stage: Stage) -> None:
             _clear_stage2(project)
         if s is Stage.PROPOSAL:
             project.estimate = None
+            project.client_decision = None
             project.gate_decisions = [d for d in project.gate_decisions if d.gate != 2]
+
+
+def _supersede_pending_change(project: Project, by: str) -> None:
+    """A full re-run already covers a pending change request, so it must not be applied on top."""
+    from ..state.models import now
+
+    for cr in project.change_requests:
+        if cr.status == "analysed":
+            cr.status, cr.applied_at = "applied", now()
+            project.log(f"{cr.id} is covered by the full {by} re-run")
 
 
 # ---------- Stage 2: platform decision (no gate of its own; reviewed at Gate 2) ----------
@@ -260,6 +272,7 @@ def run_stage2(deps: Deps, project_id: str) -> Project:
     if project.stage_status[Stage.REQUIREMENTS] is not StageStatus.APPROVED:
         raise RuntimeError("Gate 1 must be approved before the platform decision (Stage 2)")
     _reset_from(project, Stage.PLATFORM)
+    _supersede_pending_change(project, "Stage 2")
     project.stage_status[Stage.PLATFORM] = StageStatus.RUNNING
     deps.store.save(project)
     deps.tracer.record(project_id, {"type": "stage_start", "stage": Stage.PLATFORM.value})
@@ -317,4 +330,151 @@ def run_stage3(deps: Deps, project_id: str) -> Project:
     )
     deps.store.save(project)
     deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.PROPOSAL.value})
+    return project
+
+
+# ---------- Client decision on the proposal (after internal Gate 2) ----------
+
+def record_client_decision(
+    deps: Deps, project: Project, approved: bool, opted_in_gap_ids: list[str] | None = None, comment: str = ""
+) -> Project:
+    """The client approves or rejects the proposal and opts into recommended additions.
+
+    Accepted additions become requirements (their gaps ANSWERED) and join the base estimate.
+    On approval, additions the client did not take become out of scope (exclusions).
+    """
+    from ..state.models import ClientDecision, GapStatus, Requirement, SourceRef
+    from ..state.store import next_id
+
+    if project.stage_status[Stage.PROPOSAL] is not StageStatus.APPROVED:
+        raise RuntimeError("Gate 2 must be approved internally before recording the client's decision")
+    offered = {g.id: g for g in project.gaps if g.status is GapStatus.RECOMMENDED}
+    opted = list(dict.fromkeys(opted_in_gap_ids or []))
+    unknown = [g for g in opted if g not in offered]
+    if unknown:
+        raise ValueError(f"Not recommended additions on offer: {', '.join(unknown)}")
+    if opted and not approved:
+        raise ValueError("Additions can only be opted into when the client approves")
+    project.client_decision = ClientDecision(approved=approved, opted_in_gap_ids=opted, comment=comment)
+    if not approved:
+        project.stage_status[Stage.PROPOSAL] = StageStatus.REJECTED
+        project.log(f"Client rejected the proposal: {comment}. Submit a change request or revise and re-approve Gate 2.")
+        deps.store.save(project)
+        return project
+
+    e = project.estimate
+    m = project.platform_matrix
+    for gid in opted:
+        gap = offered[gid]
+        req = Requirement(
+            id=next_id("REQ", (r.id for r in project.requirements)),
+            text=f"Recommended addition accepted by the client ({gid}): {gap.description}",
+            source=SourceRef(kind="client_decision", ref="proposal approval"),
+        )
+        project.requirements.append(req)
+        gap.status, gap.linked_requirement_id = GapStatus.ANSWERED, req.id
+        tasks = [t for t in e.tasks if t.gap_id == gid]
+        for t in tasks:
+            t.requirement_ids.append(req.id)
+        for d in m.included():
+            if any(t.platform == d.platform for t in tasks):
+                d.requirement_ids.append(req.id)
+        e.accepted_gap_ids.append(gid)
+    for gid, gap in offered.items():
+        if gid not in opted:
+            gap.status = GapStatus.OUT_OF_SCOPE
+            e.declined_gap_ids.append(gid)
+    project.log(f"Client approved the proposal; opted into {', '.join(opted) or 'no additions'}; "
+                f"{len(offered) - len(opted)} addition(s) moved to exclusions")
+    deps.store.save(project)
+    return project
+
+
+# ---------- Change requests: re-enter at Stage 1, re-estimate only what changed ----------
+
+def submit_change_request(deps: Deps, project_id: str, text: str) -> Project:
+    """Analyse a change request against the current requirements and reopen Gate 1.
+
+    Later stages keep their data but go back to pending; apply_change_request() updates them
+    for the affected requirements only, once Gate 1 is approved again.
+    """
+    from ..agents import change_analyst
+    from ..state.models import ChangeRequest
+    from ..state.store import next_id
+
+    project = deps.store.load(project_id)
+    if project.stage_status[Stage.REQUIREMENTS] not in (
+        StageStatus.WAITING_GATE, StageStatus.REJECTED, StageStatus.APPROVED
+    ):
+        raise RuntimeError("Stage 1 has not run yet; add the change to the project inputs instead")
+    if any(cr.status == "analysed" for cr in project.change_requests):
+        raise RuntimeError("Apply the pending change request before submitting another")
+    if not text.strip():
+        raise ValueError("The change request is empty")
+    cr = ChangeRequest(id=next_id("CR", (c.id for c in project.change_requests)), text=text.strip())
+    new_lines = change_analyst.lines_for(project, cr.id, cr.text)
+    project.sow_lines.extend(new_lines)
+    cr.line_ids = [line.id for line in new_lines]
+    result = change_analyst.run(deps.llm_for(project.id, change_analyst.NAME), project, cr)
+    change_analyst.apply(project, cr, result)
+    project.change_requests.append(cr)
+
+    project.stage_status[Stage.REQUIREMENTS] = StageStatus.WAITING_GATE
+    project.gate_decisions = [d for d in project.gate_decisions if d.gate not in (1, 2)]
+    project.client_decision = None
+    for s in (Stage.PLATFORM, Stage.PROPOSAL):
+        if project.stage_status[s] is not StageStatus.PENDING:
+            project.stage_status[s] = StageStatus.PENDING
+    project.log(f"{cr.id} analysed: {len(cr.added)} added, {len(cr.changed)} changed, {len(cr.removed)} removed. "
+                "Gate 1 is open again.")
+    deps.store.save(project)
+    return project
+
+
+def apply_change_request(deps: Deps, project_id: str) -> Project:
+    """After Gate 1 is re-approved: update the platform matrix and re-estimate only the affected work."""
+    from ..agents import estimator as est
+    from ..state.models import now
+
+    project = deps.store.load(project_id)
+    cr = next((c for c in project.change_requests if c.status == "analysed"), None)
+    if cr is None:
+        raise RuntimeError("No change request is waiting to be applied")
+    if project.stage_status[Stage.REQUIREMENTS] is not StageStatus.APPROVED:
+        raise RuntimeError("Gate 1 must be approved again before the change request is applied")
+
+    m, e = project.platform_matrix, project.estimate
+    if m is not None:
+        included = {d.platform: d for d in m.included()}
+        for d in m.decisions:
+            d.requirement_ids = [r for r in d.requirement_ids if r not in cr.removed]
+        for rid, platforms in cr.platforms.items():
+            unknown = [p for p in platforms if p not in included]
+            if unknown:
+                project.log(f"{cr.id}: {rid} asks for platform(s) not in the matrix: {', '.join(unknown)}. "
+                            "Re-run Stage 2 if the project needs them.")
+            for p in platforms:
+                if p in included and rid not in included[p].requirement_ids:
+                    included[p].requirement_ids.append(rid)
+        project.stage_status[Stage.PLATFORM] = StageStatus.DONE
+
+    if m is not None and e is not None:
+        affected = cr.affected()
+        dropped = [t for t in e.tasks if set(t.requirement_ids) & affected]
+        # Requirements that shared a dropped task lose coverage too, so they are re-estimated with it.
+        active = {r.id for r in project.active_requirements()}
+        redo = ({rid for t in dropped for rid in t.requirement_ids} | set(cr.added) | set(cr.changed)) & active
+        e.tasks = [t for t in e.tasks if t not in dropped]
+        result = est.run(deps.llm_for(project.id, est.NAME), project, only=redo)
+        fresh, notes = est.build_estimate(project, result, e.risk_buffer_pct, existing_ids=tuple(t.id for t in e.tasks))
+        e.tasks.extend(fresh.tasks)
+        for note in notes:
+            project.log(note)
+        project.stage_status[Stage.PROPOSAL] = StageStatus.WAITING_GATE
+        project.log(f"{cr.id} applied: dropped {len(dropped)} task(s), re-estimated {len(redo)} requirement(s) "
+                    f"as {len(fresh.tasks)} task(s); other tasks unchanged. Gate 2 is open again.")
+    else:
+        project.log(f"{cr.id} applied to the requirements; later stages have not run yet.")
+    cr.status, cr.applied_at = "applied", now()
+    deps.store.save(project)
     return project

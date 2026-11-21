@@ -69,7 +69,7 @@ def client_platforms(project: Project) -> list[str]:
 
 def run(llm: LLMClient, project: Project) -> dict:
     b = project.brief
-    reqs = "\n".join(f"{r.id} [{r.kind}]: {r.text}" for r in project.requirements) or "(none)"
+    reqs = "\n".join(f"{r.id} [{r.kind}]: {r.text}" for r in project.active_requirements()) or "(none)"
     stated = client_platforms(project)
     prompt = (
         f"Goal: {b.goal if b else ''}\nDomain: {b.domain if b else ''}\nRegion: {b.region if b else ''}\n"
@@ -83,7 +83,7 @@ def run(llm: LLMClient, project: Project) -> dict:
 def build_matrix(project: Project, result: dict) -> tuple[PlatformMatrix, list[str]]:
     """Turn the model's answer into a matrix that obeys the rules. Returns the matrix and notes."""
     notes: list[str] = []
-    req_ids = {r.id for r in project.requirements}
+    req_ids = {r.id for r in project.active_requirements()}
     stated = set(client_platforms(project))
     rows: dict[str, PlatformDecision] = {}
 
@@ -180,5 +180,5 @@ def platform_check(project: Project) -> PlatformReport:
     failures += [f"{d.platform} is included but serves no requirement" for d in included if not d.requirement_ids]
     served = {rid for d in included for rid in d.requirement_ids}
     failures += [f"{r.id} is not served by any included platform: \"{r.text[:80]}\""
-                 for r in project.requirements if r.kind == "functional" and r.id not in served]
+                 for r in project.active_requirements() if r.kind == "functional" and r.id not in served]
     return PlatformReport(passed=not failures, failures=failures)
