@@ -37,7 +37,11 @@ not new agents.
   model only adds project rules, project context skill from the design, Claude Code SKILL.md layout).
 - Done (branch `feature/stage6-internal-plan`, stacked): Stage 6 plan (tickets from the estimate, model dependencies
   validated and cycles broken, sprints scheduled by code, validation report, Jira CSV export, tech lead review non-blocking).
-- Next: pull a model and run the eval to tune prompts; Stage 7 build (scaffold + first modules from tickets); rate card for team plan, timeline and cost; proposal doc and
+- Done (branch `feature/stage7-build`, stacked): Stage 7 build loop (developer agent per ticket, GuardedGit rules,
+  local git host with real branches and recorded pull requests, human merge unblocks dependents, failed tickets
+  retried explicitly, handover when agent-scope tickets are merged).
+- Next: pull a model and run the eval to tune prompts; GitHub host and sandbox for Stage 7 (needs decisions below);
+  Stage 8 QA and release; rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.
 
 ## Decisions already made (do not re-ask)
@@ -61,6 +65,7 @@ not new agents.
 | Monthly LLM budget | Unknown; measure with the cost meter during the demo |
 | Tech packs | v1 written by Claude Code (Flutter, React Native, Kotlin, Swift, React, Next.js, NestJS, FastAPI, Spring); tech lead to review and own |
 | Sprint plan | `JIRA_PROJECT_KEY=SDLC` placeholder until the real key exists; 2-week sprints, 240 h capacity per sprint (placeholders, tech lead to set); tickets reach Jira by CSV import for now (API needs Jira URL and token) |
+| Stage 7 build | Agents build tickets up to `BUILD_MAX_SPRINT` (default 1). Every agent write goes through `GuardedGit` (feature branches only, PRs into develop, Jira/ticket key in commits, requirement ids in PR body, no secrets or paths outside the repo). Local git host for the demo; GitHub host, coding agent choice (Claude Code headless vs local model) and Docker sandbox still to decide |
 | Estimate risk buffer | 15% default (`RISK_BUFFER_PCT` in .env), reviewed at Gate 2; placeholder until there is effort history |
 
 ## Rules that must hold in code
@@ -87,8 +92,9 @@ not new agents.
 - `src/sdlc_agent/llm/` model interface (Ollama, Anthropic)
 - `src/sdlc_agent/state/` Project model and store
 - `src/sdlc_agent/intake/` detect input, readers, brief, questionnaire
-- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design, skills_setup, planner (run() is pure, apply() merges)
+- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design, skills_setup, planner, developer (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
+- `src/sdlc_agent/build/git_host.py` GitHost interface, GuardedGit rules, Fake and Local hosts; `orchestrator/build.py` Stage 7 loop
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `tech_packs/*.yaml` (stacks Stage 4 may choose), `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`
 

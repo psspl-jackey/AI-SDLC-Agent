@@ -363,6 +363,12 @@ class Ticket(BaseModel):
     hours: float = 0.0  # expected hours from the estimate
     depends_on: list[str] = Field(default_factory=list)  # ticket ids
     sprint: Optional[int] = None  # 1-based; epics have none
+    jira_issue_key: Optional[str] = None  # set after the CSV import, e.g. SDLC-12
+
+    @property
+    def key(self) -> str:
+        """Key used in branch names and commit messages: the Jira key once known, else the ticket id."""
+        return self.jira_issue_key or self.id
 
 
 class PlanReview(BaseModel):
@@ -386,6 +392,18 @@ class Plan(BaseModel):
         return max((t.sprint or 0 for t in self.tasks()), default=0)
 
 
+class BuildRecord(BaseModel):
+    ticket_id: str
+    status: Literal["pr_open", "merged", "failed", "superseded"]
+    branch: str = ""
+    pr_url: str = ""
+    commit: str = ""
+    files: list[str] = Field(default_factory=list)
+    summary: str = ""
+    error: str = ""
+    created_at: datetime = Field(default_factory=now)
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -406,6 +424,7 @@ class Project(BaseModel):
     design: Optional[SolutionDesign] = None  # Stage 4
     skill_pack: Optional[SkillPack] = None  # Stage 5
     plan: Optional[Plan] = None  # Stage 6
+    builds: list[BuildRecord] = Field(default_factory=list)  # Stage 7; kept as history across re-plans
     change_requests: list[ChangeRequest] = Field(default_factory=list)
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(

@@ -157,11 +157,26 @@ class FakeLLM:
             tasks = re.findall(r"^(TASK-\d+) \[(\S+)\] .*? / (.+)$", prompt, re.MULTILINE)
             setup = next(t for t, _, title in tasks if title.startswith("Project setup"))
             qa = next(t for t, _, title in tasks if title.startswith("Test plan"))
-            deps = [{"task": t, "depends_on": [setup]} for t, _, title in tasks if title.startswith("Post-ad")]
-            deps += [{"task": setup, "depends_on": [qa, setup, "TASK-999"]},  # cycle, self link, unknown
+            post = {p: t for t, p, title in tasks if title.startswith("Post-ad")}
+            deps = [{"task": t, "depends_on": [setup]} for t in post.values()]
+            deps += [{"task": post["android"], "depends_on": [post["ios"]]},  # android <-> ios is a cycle
+                     {"task": post["ios"], "depends_on": [post["android"]]},
+                     {"task": setup, "depends_on": [setup, "TASK-999"]},  # self link, unknown task
                      {"task": qa, "depends_on": [setup]},
                      {"task": "TASK-888", "depends_on": [setup]}]
             data = {"dependencies": deps}
+        elif "developer agent" in system:
+            title = re.search(r"^# Ticket \S+: (.+)$", prompt, re.MULTILINE).group(1)
+            if "Test plan" in title:  # no unit tests: the build must refuse it
+                files = [{"path": "docs/test-plan.md", "content": "# Test plan\n"}]
+            elif "Project setup" in title:
+                files = [{"path": "app/pubspec.yaml", "content": "name: app\n"},
+                         {"path": "app/test/smoke_test.dart", "content": "void main() {}\n"}]
+            else:
+                slug = re.sub(r"[^a-z]+", "_", title.lower()).strip("_")
+                files = [{"path": f"app/lib/{slug}.dart", "content": "// post ad\n"},
+                         {"path": f"app/test/{slug}_test.dart", "content": "void main() {}\n"}]
+            data = {"files": files, "summary": f"Implemented {title}", "notes": ["Generated in a test"]}
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:

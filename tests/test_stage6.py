@@ -54,15 +54,17 @@ def test_plan_tickets_dependencies_and_sprints(deps):
     setup = next(t for t in plan.tasks() if "Project setup" in t.summary)
     qa = next(t for t in plan.tasks() if "Test plan" in t.summary)
     post = [t for t in plan.tasks() if "Post-ad flow" in t.summary]
-    assert all(t.depends_on == [setup.id] for t in post)
-    # The cycle setup <-> QA is broken, and the self link and unknown ids are ignored.
-    assert not (qa.id in setup.depends_on and setup.id in qa.depends_on)
-    assert setup.id not in setup.depends_on
+    assert all(setup.id in t.depends_on for t in post) and qa.depends_on == [setup.id]
+    # The android <-> ios cycle is broken; the self link and unknown ids are ignored.
+    android = next(t for t in post if t.platform == "android")
+    ios = next(t for t in post if t.platform == "ios")
+    assert not (ios.id in android.depends_on and android.id in ios.depends_on)
+    assert setup.depends_on == []
     assert any("closed a cycle" in n for n in project.notes)
     assert any("unknown task TASK-888" in n for n in project.notes)
     # Ticket descriptions carry what Stage 7 needs.
-    assert "Follow skills: project-context, flutter" in post[0].description
-    assert "REQ-001" in post[0].description and post[0].requirement_ids == ["REQ-001"]
+    assert "Follow skills: project-context, flutter" in android.description
+    assert "REQ-001" in android.description and android.requirement_ids == ["REQ-001"]
     assert project.stage_status[Stage.PLAN] is StageStatus.DONE
     assert planner.plan_check(project).passed, planner.plan_check(project).failures
 

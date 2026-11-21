@@ -36,7 +36,8 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Gate 3 approval by all three roles, blocked while the design check fails | Working |
 | Stage 5 skills setup: project skill pack from tech packs, tailored rules added, Claude Code SKILL.md layout | Working |
 | Stage 6 internal plan: tickets, dependencies, sprints, validation report, Jira CSV, tech lead review | Working (Jira by CSV import; placeholder key SDLC) |
-| Stages 7 to 9 | Later phases |
+| Stage 7 build: developer agent per ticket, guarded git (feature branches, PRs into develop, secret scan), human merge per PR | Working on a local git host (GitHub host, sandbox and coding agent choice pending) |
+| Stages 8 and 9 | Later phases |
 
 ## Setup (macOS)
 
@@ -109,6 +110,7 @@ src/sdlc_agent/
   gaps/                  gap register and the Gate 1 coverage check
   questions/             question queue and assumption log
   orchestrator/          LangGraph Stage 1 graph and Gate 1 decisions
+  build/                 Stage 7 git hosts and the GuardedGit rules
   tracing.py             per-project trace and cost meter
   exports.py             requirements doc, gap register, competitor matrix, questions
   evals.py               score Stage 0-1 output against sample answer keys

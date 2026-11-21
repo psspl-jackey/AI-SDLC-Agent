@@ -28,7 +28,7 @@ def test_dashboard_screens_and_gate1(settings, monkeypatch):
     at.session_state["project_id"] = project.id
     at.run()
     for screen in ["Overview", "Questions", "Requirements", "Gap register",
-                   "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval", "Design", "Gate 3 approval", "Skills", "Plan", "Change requests",
+                   "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval", "Design", "Gate 3 approval", "Skills", "Plan", "Build", "Change requests",
                    "Deliverables", "Trace and cost"]:
         at.sidebar.radio[0].set_value(screen).run()
         assert not at.exception, screen
@@ -80,6 +80,13 @@ def test_dashboard_screens_and_gate1(settings, monkeypatch):
     assert not at.exception
     next(b for b in at.button if b.label == "Approve plan").click().run()
     assert deps.store.load(project.id).plan.review.approved
+    at.sidebar.radio[0].set_value("Build").run()
+    next(b for b in at.button if b.label == "Build next ticket").click().run()
+    assert not at.exception
+    assert deps.store.load(project.id).builds[0].status == "pr_open"
+    next(b for b in at.button if b.label == "Mark merged").click().run()
+    assert not at.exception
+    assert deps.store.load(project.id).builds[0].status == "merged"
 
     at.sidebar.radio[0].set_value("Change requests").run()
     at.text_area[0].input("Sellers should be able to mark ads as sold").run()

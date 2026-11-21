@@ -22,6 +22,7 @@ class Settings:
     jira_project_key: str = "SDLC"
     sprint_weeks: int = 2
     sprint_capacity_hours: float = 240.0
+    build_max_sprint: int = 1
 
     @property
     def projects_dir(self) -> Path:
@@ -47,4 +48,5 @@ def get_settings() -> Settings:
         jira_project_key=os.getenv("JIRA_PROJECT_KEY", "SDLC").strip().upper() or "SDLC",
         sprint_weeks=int(os.getenv("SPRINT_WEEKS", "2")),
         sprint_capacity_hours=float(os.getenv("SPRINT_CAPACITY_HOURS", "240")),
+        build_max_sprint=int(os.getenv("BUILD_MAX_SPRINT", "1")),
     )

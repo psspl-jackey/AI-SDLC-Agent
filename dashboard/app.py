@@ -1,4 +1,4 @@
-"""Dashboard v1 for the AI SDLC Agent (intake through Stage 6 internal plan).
+"""Dashboard v1 for the AI SDLC Agent (intake through Stage 7 build).
 
 Run from the repo root:  streamlit run dashboard/app.py
 """
@@ -18,6 +18,7 @@ from sdlc_agent.orchestrator import (
     Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
     review_plan, run_stage2, run_stage3, run_stage4, run_stage5, run_stage6, start_intake, submit_change_request,
 )
+from sdlc_agent.orchestrator.build import build_next, failed_tickets, in_scope, latest, local_host, mark_merged
 from sdlc_agent.orchestrator.pipeline import GATE_STAGE
 from sdlc_agent.questions.queue import answer_question, open_questions
 from sdlc_agent.state.models import GATE_APPROVERS, GapStatus, RawInput, Stage, StageStatus
@@ -68,7 +69,7 @@ with st.sidebar:
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
                                    "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
-                                   "Design", "Gate 3 approval", "Skills", "Plan", "Change requests", "Deliverables",
+                                   "Design", "Gate 3 approval", "Skills", "Plan", "Build", "Change requests", "Deliverables",
                                    "Trace and cost"])
 
 
@@ -402,6 +403,71 @@ def plan_screen(project) -> None:
         st.rerun()
 
 
+def build_screen(project) -> None:
+    st.header("Stage 7: build")
+    max_sprint = deps.settings.build_max_sprint
+    st.write(f"Agents build the scaffold and first modules only: tickets up to sprint {max_sprint}. Each ticket "
+             "becomes a feature branch and a pull request into develop; a human reviews and merges every one, "
+             "and only then can the tickets that depend on it start. Human developers take over the rest.")
+    if project.plan is None or project.stage_status[Stage.PLAN] is not StageStatus.DONE:
+        st.info("Run the internal plan (Stage 6) first.")
+        return
+    host = local_host(deps, project.id)
+    st.caption(f"Git host: local repository at {host.repo} (nothing is pushed). "
+               "A GitHub host plugs in once a repository and a scoped token are set up.")
+    if st.button("Build next ticket", type="primary"):
+        with st.spinner("The developer agent is working on the next ticket"):
+            try:
+                _, rec = build_next(deps, project.id, host)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        if rec is None:
+            st.info("No ticket is ready: waiting for reviews and merges, or all agent tickets are done.")
+        else:
+            st.rerun()
+    rows = []
+    for t in in_scope(project, max_sprint):
+        rec = latest(project, t.id)
+        rows.append({"Sprint": t.sprint, "Ticket": t.id, "Jira": t.jira_issue_key or "", "Summary": t.summary,
+                     "Depends on": ", ".join(t.depends_on), "Status": rec.status if rec else "not started",
+                     "Pull request": rec.pr_url if rec else "", "Problem": rec.error if rec else ""})
+    st.dataframe(rows, hide_index=True, width="stretch")
+    open_prs = [t for t in in_scope(project, max_sprint) if (r := latest(project, t.id)) and r.status == "pr_open"]
+    if open_prs:
+        st.subheader("Waiting for human review")
+        for t in open_prs:
+            rec = latest(project, t.id)
+            c1, c2 = st.columns([4, 1])
+            c1.write(f"**{t.id}** {t.summary}  \n`{rec.branch}` · {', '.join(rec.files)}")
+            if c2.button("Mark merged", key=f"merge_{t.id}"):
+                mark_merged(deps, project, t.id, host)
+                st.rerun()
+    failed = failed_tickets(project, max_sprint)
+    if failed:
+        st.subheader("Failed")
+        for t in failed:
+            c1, c2 = st.columns([4, 1])
+            c1.write(f"**{t.id}** {t.summary}: {latest(project, t.id).error}")
+            if c2.button("Retry", key=f"retry_{t.id}"):
+                with st.spinner("Retrying"):
+                    try:
+                        build_next(deps, project.id, host, retry_ticket_id=t.id)
+                    except Exception as exc:
+                        st.error(friendly_error(exc))
+                        return
+                st.rerun()
+    with st.expander("Set Jira keys after the CSV import"):
+        st.caption("Branches and commit messages use the Jira key once it is set, otherwise the ticket id.")
+        tickets = {f"{t.id} {t.summary}": t for t in project.plan.tasks()}
+        pick = st.selectbox("Ticket", list(tickets))
+        key = st.text_input("Jira key", placeholder=f"{project.plan.jira_key}-12")
+        if st.button("Save Jira key") and key.strip():
+            tickets[pick].jira_issue_key = key.strip().upper()
+            deps.store.save(project)
+            st.rerun()
+
+
 def change_requests_screen(project) -> None:
     st.header("Change requests")
     st.write("A change re-enters at Stage 1: requirements are updated, Gate 1 opens again, and after approval "
@@ -556,7 +622,7 @@ else:
         "Gap register": gaps_screen, "Gate 1 approval": lambda p: gate_screen(p, 1), "Platforms": platforms_screen,
         "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
         "Design": design_screen, "Gate 3 approval": lambda p: gate_screen(p, 3), "Skills": skills_screen,
-        "Plan": plan_screen,
+        "Plan": plan_screen, "Build": build_screen,
         "Change requests": change_requests_screen,
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,
