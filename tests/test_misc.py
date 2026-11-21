@@ -19,3 +19,22 @@ def test_packs_load_and_match():
     assert match_pack("classifieds marketplace", packs)[0] == "classifieds"
     assert match_pack("online store", packs)[0] == "ecommerce"
     assert match_pack("space rockets", packs) is None
+
+
+def test_ollama_errors_say_what_to_do(monkeypatch):
+    import httpx
+    import pytest
+
+    from sdlc_agent.llm.ollama import OllamaClient
+
+    client = OllamaClient("http://localhost:11434", "qwen2.5:14b")
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: httpx.Response(404, request=httpx.Request("POST", a[0])))
+    with pytest.raises(RuntimeError, match="ollama pull qwen2.5:14b"):
+        client.complete("s", "p")
+
+    def refuse(*a, **k):
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr(httpx, "post", refuse)
+    with pytest.raises(RuntimeError, match="ollama serve"):
+        client.complete("s", "p")

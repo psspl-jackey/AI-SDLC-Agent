@@ -67,7 +67,7 @@ not new agents.
 - `src/sdlc_agent/intake/` detect input, readers, brief, questionnaire
 - `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
-- `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`
+- `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`
 
 ## Commands
@@ -75,6 +75,7 @@ not new agents.
 - Setup: `python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]" && cp .env.example .env`
 - Tests (no model needed, scripted FakeLLM): `pytest -q`
 - Dashboard: `streamlit run dashboard/app.py` (needs `ollama serve` and the model pulled)
+- Eval against answer keys: `python -m sdlc_agent.evals samples/*.answers.yaml` (uses the model in `.env`; reports in `data/evals/reports/`)
 
 ## Working rules for Claude Code
 

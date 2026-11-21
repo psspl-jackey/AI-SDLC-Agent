@@ -26,7 +26,12 @@ class OllamaClient:
         }
         if json_mode:
             body["format"] = "json"
-        resp = httpx.post(f"{self._url}/api/chat", json=body, timeout=600)
+        try:
+            resp = httpx.post(f"{self._url}/api/chat", json=body, timeout=600)
+        except httpx.ConnectError as exc:
+            raise RuntimeError(f"Ollama is not running at {self._url}. Start it with: ollama serve") from exc
+        if resp.status_code == 404:
+            raise RuntimeError(f"Ollama model '{self._model}' is not pulled. Run: ollama pull {self._model}")
         resp.raise_for_status()
         data = resp.json()
         return LLMResponse(

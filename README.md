@@ -76,6 +76,17 @@ pytest -q
 The tests use a scripted fake model, so they run without Ollama or Claude. GitHub Actions runs them
 on every push and pull request.
 
+## Eval: score the agents against the answer keys
+
+```bash
+python -m sdlc_agent.evals samples/*.answers.yaml
+```
+
+Runs Stage 0 and Stage 1 on each sample with the model set in `.env`, answers the intake form from the
+key, and prints planted gaps found, expected requirements found, and gaps not in the key. Matching is
+plain code (keywords in the key), so scores are comparable across models and prompt changes. Full
+reports go to `data/evals/reports/`; eval projects stay out of the dashboard's project list.
+
 ## Project structure
 
 ```
@@ -90,6 +101,7 @@ src/sdlc_agent/
   orchestrator/          LangGraph Stage 1 graph and Gate 1 decisions
   tracing.py             per-project trace and cost meter
   exports.py             requirements doc, gap register, competitor matrix, questions
+  evals.py               score Stage 0-1 output against sample answer keys
 domain_packs/            feature checklists and compliance prompts per domain
 skills/                  reusable instructions for agents (NFR checklist)
 dashboard/               Streamlit dashboard
@@ -107,7 +119,7 @@ tests/                   unit, pipeline and dashboard tests
 ## Next steps
 
 1. Write the remaining sample inputs and answer keys (see `samples/README.md`).
-2. Run the samples on the local model, compare with the answer keys, and tune prompts.
+2. Run the eval on the local model (`python -m sdlc_agent.evals samples/*.answers.yaml`) and tune prompts.
 3. Choose a free search option for automatic competitor discovery and plug it into `SearchProvider`.
 4. Add a vision-capable model for screenshots and wireframes.
 5. Phase 2: platform decision, estimator, proposal doc and PPT in Prakash Infotech templates.
