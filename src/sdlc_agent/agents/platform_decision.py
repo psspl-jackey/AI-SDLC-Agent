@@ -14,8 +14,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..llm.base import LLMClient, parse_json
+from ..llm.base import LLMClient
+from ..llm.json_call import Dicts, complete_json
 from ..state.models import CORE_PLATFORMS, PlatformDecision, PlatformMatrix, Project
+
+SHAPE = {
+    "platforms": Dicts({"platform": "str", "included": "bool", "reason": "str", "requirement_ids": "strs"}),
+    "approach": "str", "approach_reason": "str",
+}
 
 NAME = "platform_decision"
 
@@ -77,7 +83,7 @@ def run(llm: LLMClient, project: Project) -> dict:
         f"Platforms stated by the client: {', '.join(stated) or 'none'}\n\n"
         f"Requirements:\n{reqs}\n\n{SCHEMA}"
     )
-    return parse_json(llm.complete(SYSTEM, prompt, json_mode=True).text)
+    return complete_json(llm, SYSTEM, prompt, SHAPE)
 
 
 def build_matrix(project: Project, result: dict) -> tuple[PlatformMatrix, list[str]]:

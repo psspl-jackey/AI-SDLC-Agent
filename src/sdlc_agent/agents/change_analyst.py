@@ -10,11 +10,22 @@ run() is pure and returns a result dict; apply() is the only writer.
 from __future__ import annotations
 
 from ..gaps.register import add_gap
-from ..llm.base import LLMClient, parse_json
+from ..llm.base import LLMClient
+from ..llm.json_call import Dicts, complete_json
 from ..questions.queue import ask
 from ..state.models import ChangeRequest, GapSource, Project, Requirement, SourceRef, SowLine
 from ..state.store import next_id
 from .platform_decision import normalise
+
+SHAPE = {
+    "added": Dicts({"text": "str", "kind": "str", "line_ids": "strs", "platforms": "strs"}, text_key="text"),
+    "changed": Dicts({"id": "str", "text": "str", "line_ids": "strs", "platforms": "strs"}),
+    "removed": Dicts({"id": "str", "line_ids": "strs"}),
+    "not_requirement_line_ids": "strs",
+    "gaps": Dicts({"description": "str", "question": "str", "assumed_answer": "str", "source": "str",
+                   "blocking": "bool"},
+                  text_key="description"),
+}
 
 NAME = "change_analyst"
 
@@ -47,7 +58,7 @@ def run(llm: LLMClient, project: Project, cr: ChangeRequest) -> dict:
         f"Project platforms: {platforms}\n\nCurrent requirements:\n{reqs}\n\n"
         f"Change request {cr.id} lines:\n{cr_lines}\n\n{SCHEMA}"
     )
-    return parse_json(llm.complete(SYSTEM, prompt, json_mode=True).text)
+    return complete_json(llm, SYSTEM, prompt, SHAPE)
 
 
 def apply(project: Project, cr: ChangeRequest, result: dict) -> None:

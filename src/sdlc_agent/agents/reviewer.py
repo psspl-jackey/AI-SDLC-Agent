@@ -10,8 +10,11 @@ from typing import Callable
 
 import httpx
 
-from ..llm.base import LLMClient, parse_json
+from ..llm.base import LLMClient
+from ..llm.json_call import Dicts, complete_json
 from ..state.models import Project
+
+SHAPE = {"duplicates": Dicts({"keep": "str", "remove": "strs"}), "rewrites": Dicts({"id": "str", "text": "str"})}
 
 NAME = "reviewer"
 
@@ -34,12 +37,9 @@ def run(llm: LLMClient, project: Project, *, check_link: Callable[[str], bool] =
     result = {"duplicates": [], "rewrites": [], "broken_links": []}
     if project.gaps:
         listing = "\n".join(f"{g.id} [{g.source.value}]: {g.description}" for g in project.gaps)
-        data = parse_json(llm.complete(
-            SYSTEM,
+        data = complete_json(llm, SYSTEM,
             f"Gap register:\n{listing}\n\nReturn JSON: "
-            '{"duplicates": [{"keep": str, "remove": [str]}], "rewrites": [{"id": str, "text": str}]}',
-            json_mode=True,
-        ).text)
+            '{"duplicates": [{"keep": str, "remove": [str]}], "rewrites": [{"id": str, "text": str}]}', SHAPE)
         result["duplicates"] = data.get("duplicates", []) or []
         result["rewrites"] = data.get("rewrites", []) or []
     for url in sorted({g.evidence_url for g in project.gaps if g.evidence_url}):

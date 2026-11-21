@@ -8,10 +8,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..gaps.register import add_gap
-from ..llm.base import LLMClient, parse_json
+from ..llm.base import LLMClient
+from ..llm.json_call import Dicts, complete_json
 from ..questions.queue import ask
 from ..state.models import GapSource, Project, Requirement, SourceRef
 from ..state.store import next_id
+
+SHAPE = {
+    "requirements": Dicts({"text": "str", "kind": "str", "sow_line_ids": "strs"}, text_key="text"),
+    "not_requirement_line_ids": "strs",
+    "gaps": Dicts({"description": "str", "question": "str", "assumed_answer": "str", "source": "str",
+                   "blocking": "bool"},
+                  text_key="description"),
+    "feasibility": Dicts({"concern": "str", "severity": "str"}, text_key="concern"),
+}
 
 NAME = "requirements_analyst"
 SKILL = Path(__file__).resolve().parents[3] / "skills" / "nfr_checklist.md"
@@ -49,7 +59,7 @@ def run(llm: LLMClient, project: Project) -> dict:
         f"Project brief (JSON):\n{brief}\n\nInput lines:\n{lines}\n\n"
         f"NFR checklist:\n{checklist}\n\n{SCHEMA}"
     )
-    return parse_json(llm.complete(SYSTEM, prompt, json_mode=True).text)
+    return complete_json(llm, SYSTEM, prompt, SHAPE)
 
 
 def apply(project: Project, result: dict) -> None:

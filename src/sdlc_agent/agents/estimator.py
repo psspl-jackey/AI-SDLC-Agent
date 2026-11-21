@@ -20,9 +20,13 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from ..llm.base import LLMClient, parse_json
+from ..llm.base import LLMClient
+from ..llm.json_call import Dicts, complete_json
 from ..state.models import Estimate, EstimateTask, GapStatus, Project
 from ..state.store import next_id
+
+TASKS_SHAPE = {"tasks": Dicts({"module": "str", "feature": "str", "title": "str", "role": "str",
+                               "requirement_ids": "strs", "gap_id": "str", "platform": "str"})}
 
 NAME = "estimator"
 COMMON = "common"
@@ -73,35 +77,26 @@ def run(llm: LLMClient, project: Project, only: set[str] | None = None) -> dict:
         if not served:
             continue
         listing = "\n".join(f"{r.id}: {r.text}" for r in served)
-        data = parse_json(llm.complete(
-            SYSTEM,
+        data = complete_json(llm, SYSTEM,
             f"{ctx}\nEstimate the {d.platform.replace('_', ' ')} work for these requirements:\n{listing}\n\n"
-            f"Non-functional requirements to respect:\n{nfrs}\n\n" + TASK_SCHEMA % "",
-            json_mode=True,
-        ).text)
+            f"Non-functional requirements to respect:\n{nfrs}\n\n" + TASK_SCHEMA % "", TASKS_SHAPE)
         result["platform_tasks"][d.platform] = data.get("tasks", []) or []
 
     if only is not None:
         return result
 
-    data = parse_json(llm.complete(
-        SYSTEM,
+    data = complete_json(llm, SYSTEM,
         f"{ctx}\nRequirements:\n" + "\n".join(f"{r.id}: {r.text}" for r in project.active_requirements())
-        + f"\n\n{COMMON_ASK}\n\n" + TASK_SCHEMA % "",
-        json_mode=True,
-    ).text)
+        + f"\n\n{COMMON_ASK}\n\n" + TASK_SCHEMA % "", TASKS_SHAPE)
     result["common_tasks"] = data.get("tasks", []) or []
 
     additions = [g for g in project.gaps if g.status is GapStatus.RECOMMENDED]
     if additions:
         platforms = ", ".join(d.platform for d in m.included())
         listing = "\n".join(f"{g.id}: {g.description}" for g in additions)
-        data = parse_json(llm.complete(
-            SYSTEM,
+        data = complete_json(llm, SYSTEM,
             f"{ctx}\n{ADDITIONS_ASK % platforms}\n\nRecommended additions:\n{listing}\n\n"
-            + TASK_SCHEMA % ', "gap_id": str, "platform": str',
-            json_mode=True,
-        ).text)
+            + TASK_SCHEMA % ', "gap_id": str, "platform": str', TASKS_SHAPE)
         result["addition_tasks"] = data.get("tasks", []) or []
     return result
 

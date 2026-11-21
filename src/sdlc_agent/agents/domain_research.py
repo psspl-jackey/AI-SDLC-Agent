@@ -15,8 +15,13 @@ from datetime import date
 from typing import Callable, Protocol
 
 from ..domain_packs import load_packs, match_pack
-from ..llm.base import LLMClient, parse_json
+from ..llm.base import LLMClient
+from ..llm.json_call import Dicts, complete_json
 from ..state.models import Chunk, Project
+
+CHECKLIST_SHAPE = {"items": Dicts({"id": "str", "status": "str", "reason": "str"})}
+COMPETITOR_SHAPE = {"name": "str", "features": "strs", "complaints": "strs"}
+GAP_SHAPE = {"missing": Dicts({"feature": "str", "competitor_ids": "strs"})}
 
 NAME = "domain_research"
 
@@ -95,7 +100,7 @@ def run(
             + f"\n\nChecklist:\n{items}\n\n"
             'Return JSON: {"items": [{"id": str, "status": "covered" | "missing" | "not_relevant", "reason": str}]}'
         )
-        data = parse_json(llm.complete(CHECKLIST_SYSTEM, prompt, json_mode=True).text)
+        data = complete_json(llm, CHECKLIST_SYSTEM, prompt, CHECKLIST_SHAPE)
         tiers = {f["id"]: f for f in pack.get("features", [])}
         for item in data.get("items", []) or []:
             feat = tiers.get(item.get("id"))
@@ -132,12 +137,9 @@ def run(
             result["notes"].append(f"Could not read competitor page {url}: {exc}")
             continue
         page = "\n".join(c.text for c in chunks)[:15000]
-        data = parse_json(llm.complete(
-            COMPETITOR_SYSTEM,
+        data = complete_json(llm, COMPETITOR_SYSTEM,
             f"Page URL: {url}\n\n{page}\n\nReturn JSON: "
-            '{"name": str, "features": [str], "complaints": [str]}',
-            json_mode=True,
-        ).text)
+            '{"name": str, "features": [str], "complaints": [str]}', COMPETITOR_SHAPE)
         comp = {
             "id": f"C{idx}", "name": data.get("name") or url, "url": url,
             "features": [str(f) for f in data.get("features", []) or []][:60],
@@ -152,13 +154,10 @@ def run(
         listing = "\n".join(
             f"{c['id']} ({c['name']}): " + "; ".join(c["features"]) for c in result["competitors"]
         )
-        data = parse_json(llm.complete(
-            GAP_SYSTEM,
+        data = complete_json(llm, GAP_SYSTEM,
             "Planned features:\n- " + "\n- ".join(_brief_features(project) or ["(none)"])
             + f"\n\nCompetitor features:\n{listing}\n\n"
-            'Return JSON: {"missing": [{"feature": str, "competitor_ids": [str]}]}',
-            json_mode=True,
-        ).text)
+            'Return JSON: {"missing": [{"feature": str, "competitor_ids": [str]}]}', GAP_SHAPE)
         by_id = {c["id"]: c for c in result["competitors"]}
         n = len(result["competitors"])
         threshold = max(2, math.ceil(n * 0.6))

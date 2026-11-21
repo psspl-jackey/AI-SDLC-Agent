@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import re
 
-from ..llm.base import LLMClient, parse_json
+from ..llm.base import LLMClient
+from ..llm.json_call import Dicts, complete_json
 from ..state.models import (
     BriefItem,
     Chunk,
@@ -14,6 +15,12 @@ from ..state.models import (
     SowLine,
 )
 from ..state.store import next_id
+
+BRIEF_SHAPE = {
+    "goal": "str", "domain": "str", "region": "str", "intent": "str", "target_users": "strs", "platforms": "strs",
+    "references": "strs", "features": Dicts(text_key="text"), "nfrs": Dicts(text_key="text"),
+    "constraints": Dicts(text_key="text"),
+}
 
 _BULLET = re.compile(r"^\s*(?:[-*•▪◦]|\d+[.)]|[a-z][.)])\s+", re.IGNORECASE)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
@@ -96,7 +103,7 @@ def _render_chunks(chunks: list[Chunk], max_chars: int = 30000) -> str:
 
 def build_brief(llm: LLMClient, chunks: list[Chunk], completeness: Completeness) -> ProjectBrief:
     prompt = f"Client input:\n\n{_render_chunks(chunks)}\n\n{BRIEF_SCHEMA}"
-    data = parse_json(llm.complete(BRIEF_SYSTEM, prompt, json_mode=True).text)
+    data = complete_json(llm, BRIEF_SYSTEM, prompt, BRIEF_SHAPE)
 
     def items(key: str) -> list[BriefItem]:
         return [
