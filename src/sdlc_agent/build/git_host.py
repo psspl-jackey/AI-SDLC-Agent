@@ -119,6 +119,12 @@ class FakeGitHost:
         self.pull_requests.append({"head": head, "base": base, "title": title, "body": body})
         return f"fake://pull/{len(self.pull_requests)}"
 
+    def merge(self, branch: str) -> None:
+        self.branches["develop"].update(self.branches[branch])
+
+    def read_tree(self, branch: str) -> dict[str, str]:
+        return dict(self.branches[branch])
+
 
 class LocalGitHost:
     """A real local repository; nothing is pushed. Pull requests are recorded next to it."""
@@ -169,3 +175,13 @@ class LocalGitHost:
         """Simulates the human merging a reviewed pull request into develop (demo only)."""
         self._git("checkout", "-q", "develop")
         self._git("merge", "-q", "--no-ff", "-m", f"Merge {branch} into develop", branch)
+
+    def read_tree(self, branch: str) -> dict[str, str]:
+        """Text files on a branch (for the Stage 8 security scan)."""
+        out: dict[str, str] = {}
+        for path in self._git("ls-tree", "-r", "--name-only", branch).splitlines():
+            try:
+                out[path] = self._git("show", f"{branch}:{path}")
+            except subprocess.CalledProcessError:
+                continue
+        return out

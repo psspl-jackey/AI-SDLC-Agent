@@ -177,6 +177,16 @@ class FakeLLM:
                 files = [{"path": f"app/lib/{slug}.dart", "content": "// post ad\n"},
                          {"path": f"app/test/{slug}_test.dart", "content": "void main() {}\n"}]
             data = {"files": files, "summary": f"Implemented {title}", "notes": ["Generated in a test"]}
+        elif "QA engineer" in system:
+            ids = re.findall(r"^(REQ-\d+):", prompt.split("Non-functional")[0], re.MULTILINE)
+            data = {"test_cases": [
+                {"title": f"Post an ad end to end ({i})", "kind": "e2e", "platform": "android",
+                 "requirement_ids": [i], "steps": ["Open app", "Post ad"], "expected": "Ad is listed"} for i in ids
+            ] + [
+                {"title": "API rejects ad without title", "kind": "Integration", "platform": "backend",
+                 "requirement_ids": ids + ["REQ-999"], "steps": ["POST /ads without title"], "expected": "400"},
+                {"title": "Smoke check", "kind": "smoke", "requirement_ids": [], "steps": [], "expected": "Loads"},
+            ]}
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:

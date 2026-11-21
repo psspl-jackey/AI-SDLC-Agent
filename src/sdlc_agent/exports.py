@@ -305,3 +305,37 @@ def plan_markdown(p: Project) -> str:
     out += ["## Validation report", "", "Passed." if report.passed else "Failed:"]
     out += [f"- {f}" for f in report.failures]
     return "\n".join(out) + "\n"
+
+
+def release_notes_markdown(p: Project) -> str:
+    """Release notes from what was delivered and tested. Written by code, no model."""
+    rel = p.release
+    out = [f"# Release notes: {p.name} {rel.version if rel else ''}".rstrip(), ""]
+    if rel is None:
+        return "\n".join(out + ["Stage 8 has not run yet."]) + "\n"
+    platforms = [x.platform.replace("_", " ") for x in p.platform_matrix.included()] if p.platform_matrix else []
+    out += [f"Platforms: {', '.join(platforms)}.", "", "## What is included", ""]
+    out += [f"- {r.text} ({r.id})" for r in p.active_requirements() if r.kind == "functional"]
+    by = {k: sum(1 for c in rel.test_cases if c.result == k) for k in ("pass", "fail", "blocked", "waived")}
+    out += ["", "## Testing", "", f"{len(rel.test_cases)} test cases: {by['pass']} passed, {by['fail']} failed, "
+            f"{by['blocked']} blocked, {by['waived']} waived, "
+            f"{sum(1 for c in rel.test_cases if c.result is None)} not run."]
+    waived = [c for c in rel.test_cases if c.result == "waived"]
+    out += ["", "## Known issues", ""]
+    out += [f"- {c.id} {c.title}: {c.note}" for c in waived] or ["- None recorded."]
+    out += ["", "## Security scan", "",
+            f"{rel.scanned_files} files scanned: " + ", ".join(
+                f"{sum(1 for f in rel.findings if f.severity == s)} {s}" for s in ("high", "medium", "low")) + "."]
+    out += [f"- [{f.severity}] {f.rule}: `{f.path}:{f.line}`" for f in rel.findings]
+    out += ["", "## Not in this release", "",
+            "- Real payment and third-party integrations; payment runs against a dummy gateway."]
+    out += [f"- {g.description}" for g in p.gaps if g.status and g.status.value == "out_of_scope"]
+    return "\n".join(out) + "\n"
+
+
+def test_report_csv(p: Project) -> str:
+    rel = p.release
+    return _csv([{"id": c.id, "kind": c.kind, "platform": c.platform, "title": c.title,
+                  "requirements": ", ".join(c.requirement_ids), "steps": " | ".join(c.steps), "expected": c.expected,
+                  "result": c.result or "", "note": c.note, "run_at": c.run_at.isoformat() if c.run_at else ""}
+                 for c in (rel.test_cases if rel else [])])

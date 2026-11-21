@@ -37,6 +37,7 @@ class TraceRow:
     sprints: list[int] = field(default_factory=list)
     pull_requests: list[str] = field(default_factory=list)
     test_files: list[str] = field(default_factory=list)
+    test_results: str = ""  # e.g. "3/4 pass" once Stage 8 has run
     status: str = "approved"
     breaks: list[str] = field(default_factory=list)
 
@@ -74,6 +75,10 @@ def _row(project: Project, r: Requirement) -> TraceRow:
     row.pull_requests = [b.pr_url for b in builds if b.pr_url]
     row.test_files = sorted({f for b in builds if b.status in ("pr_open", "merged") for f in b.files if is_test_file(f)})
 
+    if project.release:
+        cases = [c for c in project.release.test_cases if r.id in c.requirement_ids]
+        if cases:
+            row.test_results = f"{sum(1 for c in cases if c.result == 'pass')}/{len(cases)} pass"
     if tickets and builds and len(builds) == len(tickets) and all(b.status == "merged" for b in builds):
         row.status = "delivered"
     elif any(b.status == "pr_open" for b in builds):
@@ -98,6 +103,8 @@ def _row(project: Project, r: Requirement) -> TraceRow:
         row.breaks.append("not in the design")
     if functional and _ran(project, Stage.PLAN) and not row.tickets:
         row.breaks.append("no ticket")
+    if functional and project.release and not row.test_results:
+        row.breaks.append("no test case")
     return row
 
 
@@ -123,7 +130,8 @@ COLUMNS = [
     ("Input lines", "input_lines"), ("Gaps", "gaps"), ("Change requests", "change_requests"),
     ("Platforms", "platforms"), ("Estimate tasks", "tasks"), ("Expected h", "hours"), ("Screens", "screens"),
     ("API", "endpoints"), ("Data", "entities"), ("Tickets", "tickets"), ("Sprints", "sprints"),
-    ("Pull requests", "pull_requests"), ("Test files", "test_files"), ("Status", "status"), ("Breaks", "breaks"),
+    ("Pull requests", "pull_requests"), ("Test files", "test_files"), ("Test results", "test_results"),
+    ("Status", "status"), ("Breaks", "breaks"),
 ]
 
 

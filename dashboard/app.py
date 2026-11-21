@@ -1,4 +1,4 @@
-"""Dashboard v1 for the AI SDLC Agent (intake through Stage 7 build).
+"""Dashboard v1 for the AI SDLC Agent (intake through Stage 8 QA and release).
 
 Run from the repo root:  streamlit run dashboard/app.py
 """
@@ -12,13 +12,16 @@ import streamlit as st
 from sdlc_agent import exports, traceability
 from sdlc_agent.gaps.register import coverage_check, gate_status
 from sdlc_agent.intake.questionnaire import build_questionnaire
-from sdlc_agent.agents import estimator, planner
+from sdlc_agent.agents import estimator, planner, qa
 from sdlc_agent.agents.platform_decision import platform_check
 from sdlc_agent.orchestrator import (
     Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
     review_plan, run_stage2, run_stage3, run_stage4, run_stage5, run_stage6, start_intake, submit_change_request,
 )
-from sdlc_agent.orchestrator.build import build_next, failed_tickets, in_scope, latest, local_host, mark_merged
+from sdlc_agent.orchestrator.build import (
+    build_next, failed_tickets, in_scope, latest, local_host, mark_done_by_developers, mark_merged,
+)
+from sdlc_agent.orchestrator.release import record_test_result, run_stage8, set_checklist_item
 from sdlc_agent.orchestrator.pipeline import GATE_STAGE
 from sdlc_agent.questions.queue import answer_question, open_questions
 from sdlc_agent.state.models import GATE_APPROVERS, GapStatus, RawInput, Stage, StageStatus
@@ -69,7 +72,8 @@ with st.sidebar:
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
                                    "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
-                                   "Design", "Gate 3 approval", "Skills", "Plan", "Build", "Traceability", "Change requests",
+                                   "Design", "Gate 3 approval", "Skills", "Plan", "Build", "QA and release", "Gate 4 approval",
+                                   "Traceability", "Change requests",
                                    "Deliverables",
                                    "Trace and cost"])
 
@@ -242,6 +246,8 @@ GATE_TEXT = {
         "Platform and estimate checks"),
     3: ("Approve the stacks, architecture, data model, API and screens before skills setup and planning.",
         "Design check"),
+    4: ("Approve the release: every test case has a result, every requirement has a passing case, no high-severity "
+        "security finding, and the release checklist is complete.", "Release check"),
 }
 
 
@@ -458,6 +464,19 @@ def build_screen(project) -> None:
                         st.error(friendly_error(exc))
                         return
                 st.rerun()
+    human = [t for t in project.plan.tasks() if t not in in_scope(project, max_sprint)
+             and not ((r := latest(project, t.id)) and r.status == "merged")]
+    if human:
+        with st.expander(f"Tickets for the development team ({len(human)} open)"):
+            st.caption("Tickets after the agents' scope. Mark each one done when the team has merged it.")
+            for t in human:
+                c1, c2, c3 = st.columns([3, 2, 1])
+                c1.write(f"**{t.id}** [sprint {t.sprint}] {t.summary}")
+                url = c2.text_input("Pull request link", key=f"hpr_{t.id}", label_visibility="collapsed",
+                                    placeholder="Pull request link (optional)")
+                if c3.button("Done", key=f"hdone_{t.id}"):
+                    mark_done_by_developers(deps, project, t.id, url)
+                    st.rerun()
     with st.expander("Set Jira keys after the CSV import"):
         st.caption("Branches and commit messages use the Jira key once it is set, otherwise the ticket id.")
         tickets = {f"{t.id} {t.summary}": t for t in project.plan.tasks()}
@@ -486,6 +505,62 @@ def traceability_screen(project) -> None:
     only_breaks = st.toggle("Only requirements with a break")
     rows = traceability.rows_for_table(project)
     st.dataframe([r for r in rows if r["Breaks"] or not only_breaks], hide_index=True, width="stretch")
+
+
+def release_screen(project) -> None:
+    st.header("Stage 8: QA and release")
+    st.write("The QA agent writes test cases per requirement; testers run them and record results here (a sandbox "
+             "runner can replace that later). Code scans the merged code on develop and builds the release checklist.")
+    host = local_host(deps, project.id)
+    label = "Run Stage 8" if project.release is None else "Run Stage 8 again (resets results)"
+    if st.button(label, type="primary"):
+        with st.spinner("Writing test cases and scanning the code"):
+            try:
+                run_stage8(deps, project.id, host)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        st.rerun()
+    rel = project.release
+    if rel is None:
+        return
+    done = sum(1 for c in rel.test_cases if c.result)
+    c = st.columns(4)
+    c[0].metric("Test cases run", f"{done}/{len(rel.test_cases)}")
+    c[1].metric("Passed", sum(1 for x in rel.test_cases if x.result == "pass"))
+    c[2].metric("Security findings (high)", f"{len(rel.findings)} ({sum(1 for f in rel.findings if f.severity == 'high')})")
+    c[3].metric("Checklist", f"{sum(1 for i in rel.checklist if i.done)}/{len(rel.checklist)}")
+    d1, d2 = st.columns(2)
+    d1.download_button("Release notes (.md)", exports.release_notes_markdown(project), file_name=f"{project.id}-release-notes.md")
+    d2.download_button("Test report (.csv)", exports.test_report_csv(project), file_name=f"{project.id}-test-report.csv")
+    st.subheader("Test cases")
+    for case in rel.test_cases:
+        with st.expander(f"{case.id} [{case.kind}] {case.title} · {case.result or 'not run'}"):
+            st.write(f"Requirements: {', '.join(case.requirement_ids) or 'none'} · Platform: {case.platform or 'any'}")
+            for i, step in enumerate(case.steps, start=1):
+                st.write(f"{i}. {step}")
+            st.write(f"**Expected:** {case.expected}")
+            note = st.text_input("Note", value=case.note, key=f"tcn_{case.id}")
+            cols = st.columns(4)
+            for col, result in zip(cols, ("pass", "fail", "blocked", "waived")):
+                if col.button(result.capitalize(), key=f"tc_{case.id}_{result}"):
+                    try:
+                        record_test_result(deps, project, case.id, result, note)
+                    except ValueError as exc:
+                        st.error(str(exc))
+                        return
+                    st.rerun()
+    st.subheader("Security findings")
+    if rel.findings:
+        st.dataframe([f.model_dump() for f in rel.findings], hide_index=True, width="stretch")
+    else:
+        st.success(f"No findings in {rel.scanned_files} files on develop.")
+    st.subheader("Release checklist")
+    for item in rel.checklist:
+        checked = st.checkbox(f"[{item.platform}] {item.text}", value=item.done, key=f"rc_{item.id}")
+        if checked != item.done:
+            set_checklist_item(deps, project, item.id, checked)
+            st.rerun()
 
 
 def change_requests_screen(project) -> None:
@@ -616,6 +691,10 @@ def deliverables_screen(project) -> None:
                        disabled=project.plan is None, key="dl_jira")
     st.download_button("Traceability matrix (.xlsx)", traceability.xlsx(project),
                        file_name=f"{project.id}-traceability.xlsx", key="dl_trace")
+    st.download_button("Release notes (.md)", exports.release_notes_markdown(project),
+                       file_name=f"{project.id}-release-notes.md", disabled=project.release is None, key="dl_notes")
+    st.download_button("Test report (.csv)", exports.test_report_csv(project),
+                       file_name=f"{project.id}-test-report.csv", disabled=project.release is None, key="dl_tests")
     st.download_button("Sprint plan (.md)", exports.plan_markdown(project), file_name=f"{project.id}-plan.md",
                        disabled=project.plan is None, key="dl_plan")
 
@@ -644,7 +723,8 @@ else:
         "Gap register": gaps_screen, "Gate 1 approval": lambda p: gate_screen(p, 1), "Platforms": platforms_screen,
         "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
         "Design": design_screen, "Gate 3 approval": lambda p: gate_screen(p, 3), "Skills": skills_screen,
-        "Plan": plan_screen, "Build": build_screen, "Traceability": traceability_screen,
+        "Plan": plan_screen, "Build": build_screen, "QA and release": release_screen,
+        "Gate 4 approval": lambda p: gate_screen(p, 4), "Traceability": traceability_screen,
         "Change requests": change_requests_screen,
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,

@@ -38,7 +38,9 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Stage 6 internal plan: tickets, dependencies, sprints, validation report, Jira CSV, tech lead review | Working (Jira by CSV import; placeholder key SDLC) |
 | Stage 7 build: developer agent per ticket, guarded git (feature branches, PRs into develop, secret scan), human merge per PR | Working on a local git host (GitHub host, sandbox and coding agent choice pending) |
 | Traceability matrix: requirement to input line, platform, estimate, design, ticket, pull request and tests; breaks flagged | Working |
-| Stages 8 and 9 | Later phases |
+| Stage 8 QA and release: test cases per requirement, results recorded by testers, code security scan of develop, release checklist, release notes | Working (tests run by people until a sandbox exists) |
+| Gate 4 approval by all three roles, blocked while the release check fails | Working |
+| Stage 9 handover pack | Later |
 
 ## Setup (macOS)
 

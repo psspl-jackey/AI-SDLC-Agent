@@ -150,3 +150,26 @@ def _update_stage(project: Project, max_sprint: int) -> None:
         project.stage_status[Stage.BUILD] = StageStatus.DONE
     elif any(b.status != "superseded" for b in project.builds):
         project.stage_status[Stage.BUILD] = StageStatus.RUNNING
+
+
+def mark_done_by_developers(deps: Deps, project: Project, ticket_id: str, pr_url: str = "") -> Project:
+    """Record a ticket outside the agents' scope as built and merged by human developers."""
+    ticket = next((t for t in (project.plan.tasks() if project.plan else []) if t.id == ticket_id), None)
+    if ticket is None:
+        raise RuntimeError(f"Unknown ticket {ticket_id}")
+    if ticket in in_scope(project, deps.settings.build_max_sprint):
+        raise RuntimeError(f"{ticket_id} is an agent ticket; merge its pull request instead")
+    rec = latest(project, ticket_id)
+    if rec is not None and rec.status == "merged":
+        raise RuntimeError(f"{ticket_id} is already done")
+    project.builds.append(BuildRecord(ticket_id=ticket_id, status="merged", pr_url=pr_url.strip(),
+                                      summary="Built and merged by the development team"))
+    project.log(f"{ticket_id} ({ticket.key}) done by the development team" + (f": {pr_url}" if pr_url else ""))
+    deps.store.save(project)
+    return project
+
+
+def all_tickets_done(project: Project) -> list[str]:
+    """Ticket ids still not merged (agent or human)."""
+    return [t.id for t in (project.plan.tasks() if project.plan else [])
+            if (latest(project, t.id) or BuildRecord(ticket_id=t.id, status="failed")).status != "merged"]

@@ -404,6 +404,44 @@ class BuildRecord(BaseModel):
     created_at: datetime = Field(default_factory=now)
 
 
+class TestCase(BaseModel):
+    id: str  # TC-001
+    title: str
+    kind: Literal["integration", "e2e", "security"] = "e2e"
+    platform: str = ""
+    requirement_ids: list[str] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)
+    expected: str = ""
+    result: Optional[Literal["pass", "fail", "blocked", "waived"]] = None
+    note: str = ""
+    run_at: Optional[datetime] = None
+
+
+class SecurityFinding(BaseModel):
+    severity: Literal["high", "medium", "low"]
+    rule: str
+    path: str
+    line: int
+    excerpt: str = ""
+
+
+class ChecklistItem(BaseModel):
+    id: str  # RC-001
+    platform: str
+    text: str
+    done: bool = False
+    note: str = ""
+
+
+class Release(BaseModel):
+    version: str = "1.0.0"
+    test_cases: list[TestCase] = Field(default_factory=list)
+    findings: list[SecurityFinding] = Field(default_factory=list)
+    checklist: list[ChecklistItem] = Field(default_factory=list)
+    scanned_files: int = 0
+    created_at: datetime = Field(default_factory=now)
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -425,6 +463,7 @@ class Project(BaseModel):
     skill_pack: Optional[SkillPack] = None  # Stage 5
     plan: Optional[Plan] = None  # Stage 6
     builds: list[BuildRecord] = Field(default_factory=list)  # Stage 7; kept as history across re-plans
+    release: Optional[Release] = None  # Stage 8
     change_requests: list[ChangeRequest] = Field(default_factory=list)
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(

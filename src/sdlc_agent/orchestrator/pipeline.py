@@ -196,7 +196,7 @@ def run_stage1(deps: Deps, project_id: str) -> Project:
 
 # ---------- Gates ----------
 
-GATE_STAGE = {1: Stage.REQUIREMENTS, 2: Stage.PROPOSAL, 3: Stage.DESIGN}
+GATE_STAGE = {1: Stage.REQUIREMENTS, 2: Stage.PROPOSAL, 3: Stage.DESIGN, 4: Stage.QA_RELEASE}
 
 
 def gate_failures(project: Project, gate: int) -> list[str]:
@@ -207,6 +207,9 @@ def gate_failures(project: Project, gate: int) -> list[str]:
         return platform_decision.platform_check(project).failures + estimator.estimate_check(project).failures
     if gate == 3:
         return solution_design.design_check(project).failures
+    if gate == 4:
+        from ..agents import qa
+        return qa.release_check(project).failures
     raise ValueError(f"Unknown gate {gate}")
 
 
@@ -237,7 +240,7 @@ def decide_gate1(deps: Deps, project: Project, role: str, approved: bool, commen
 
 def _reset_from(project: Project, stage: Stage) -> None:
     """A stage re-runs on new inputs, so everything after it must run again."""
-    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD]
+    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD, Stage.QA_RELEASE]
     for s in order[order.index(stage):] if stage in order else []:
         project.stage_status[s] = StageStatus.PENDING
         if s is Stage.PLATFORM:
@@ -262,6 +265,9 @@ def _reset_from(project: Project, stage: Stage) -> None:
             if old:
                 project.log(f"{len(old)} build record(s) superseded by the new plan; close any open pull requests "
                             "from the old plan and check develop before rebuilding")
+        if s is Stage.QA_RELEASE:
+            project.release = None
+            project.gate_decisions = [d for d in project.gate_decisions if d.gate != 4]
 
 
 def _supersede_pending_change(project: Project, by: str) -> None:
@@ -438,9 +444,9 @@ def submit_change_request(deps: Deps, project_id: str, text: str) -> Project:
     project.change_requests.append(cr)
 
     project.stage_status[Stage.REQUIREMENTS] = StageStatus.WAITING_GATE
-    project.gate_decisions = [d for d in project.gate_decisions if d.gate not in (1, 2, 3)]
+    project.gate_decisions = [d for d in project.gate_decisions if d.gate not in (1, 2, 3, 4)]
     project.client_decision = None
-    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD):
+    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD, Stage.QA_RELEASE):
         if project.stage_status[s] is not StageStatus.PENDING:
             project.stage_status[s] = StageStatus.PENDING
     project.log(f"{cr.id} analysed: {len(cr.added)} added, {len(cr.changed)} changed, {len(cr.removed)} removed. "
