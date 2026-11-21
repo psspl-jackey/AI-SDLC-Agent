@@ -28,7 +28,7 @@ def test_dashboard_screens_and_gate1(settings, monkeypatch):
     at.session_state["project_id"] = project.id
     at.run()
     for screen in ["Overview", "Questions", "Requirements", "Gap register",
-                   "Gate 1 approval", "Platforms", "Deliverables", "Trace and cost"]:
+                   "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval", "Deliverables", "Trace and cost"]:
         at.sidebar.radio[0].set_value(screen).run()
         assert not at.exception, screen
 
@@ -45,3 +45,15 @@ def test_dashboard_screens_and_gate1(settings, monkeypatch):
     assert not at.exception
     assert deps.store.load(project.id).stage_status[Stage.PLATFORM] is StageStatus.DONE
     assert any("Platform check passed" in s.value for s in at.success)
+
+    at.sidebar.radio[0].set_value("Estimate").run()
+    next(b for b in at.button if b.label == "Run Stage 3").click().run()
+    assert not at.exception
+    at.sidebar.radio[0].set_value("Gate 2 approval").run()
+    for i in range(3):
+        next(x for x in at.selectbox if x.label == "Approving as").select_index(i).run()
+        next(b for b in at.button if b.label == "Approve").click().run()
+        assert not at.exception
+    assert deps.store.load(project.id).stage_status[Stage.PROPOSAL] is StageStatus.APPROVED
+    at.sidebar.radio[0].set_value("Deliverables").run()
+    assert not at.exception

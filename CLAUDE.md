@@ -23,7 +23,11 @@ not new agents.
 - Done (branch `feature/foundation`): foundation + Phase 1 (Stages 0 and 1, Gate 1, dashboard), eval runner
   and answer keys (classifieds key is a draft awaiting senior review).
 - Done (branch `feature/stage2-platform-decision`): Stage 2 platform decision agent, platform check, dashboard screen.
-- Next: pull a model and run the eval to tune prompts; then Stage 3 (estimator, proposal) and Gate 2.
+- Done (branch `feature/stage3-estimate`, stacked on Stage 2): Stage 3 estimator (tasks with min-likely-max hours,
+  PERT totals and risk buffer computed in code, recommended additions estimated separately), estimate sheet
+  (.xlsx), Gate 2 (three roles; blocked while platform or estimate checks fail).
+- Next: pull a model and run the eval to tune prompts; rate card for team plan, timeline and cost; proposal doc and
+  PPT once the Prakash Infotech templates arrive; client approval step after Gate 2.
 
 ## Decisions already made (do not re-ask)
 
@@ -44,6 +48,7 @@ not new agents.
 | Skills library owners | Tech lead and delivery head |
 | Past SOWs | None available; use sample inputs with planted gaps and answer keys (`samples/`) |
 | Monthly LLM budget | Unknown; measure with the cost meter during the demo |
+| Estimate risk buffer | 15% default (`RISK_BUFFER_PCT` in .env), reviewed at Gate 2; placeholder until there is effort history |
 
 ## Rules that must hold in code
 
@@ -67,7 +72,7 @@ not new agents.
 - `src/sdlc_agent/llm/` model interface (Ollama, Anthropic)
 - `src/sdlc_agent/state/` Project model and store
 - `src/sdlc_agent/intake/` detect input, readers, brief, questionnaire
-- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision (run() is pure, apply() merges)
+- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`

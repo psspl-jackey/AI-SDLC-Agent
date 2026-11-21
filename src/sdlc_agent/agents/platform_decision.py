@@ -2,7 +2,8 @@
 
 The model proposes; code enforces the rules:
 - every core platform (android, ios, web, admin_panel, backend) gets an explicit yes/no row;
-- platforms the client stated are always included, whatever the model says;
+- platforms the client stated are always included, whatever the model says; a stated mobile platform
+  without requirements mirrors its sibling (ios <-> android);
 - requirement ids must exist; platform names are normalised;
 - platforms the agent added on its own are tagged inferred and enter the gap register as assumed,
   with a non-blocking question to the client (rule: everything inferred is visible at the gate).
@@ -113,6 +114,13 @@ def build_matrix(project: Project, result: dict) -> tuple[PlatformMatrix, list[s
         row.source = "client"
         row.reason = row.reason or "Stated by the client."
 
+    # A stated mobile platform with no requirements mirrors its sibling: the apps offer the same features.
+    for name, sibling in (("ios", "android"), ("android", "ios")):
+        row, other = rows.get(name), rows.get(sibling)
+        if row and row.included and not row.requirement_ids and other and other.included and other.requirement_ids:
+            row.requirement_ids = list(other.requirement_ids)
+            notes.append(f"Platform decision: {name} had no requirements; copied them from {sibling}")
+
     for name in CORE_PLATFORMS:
         if name not in rows:
             rows[name] = PlatformDecision(platform=name, included=False,
@@ -169,6 +177,7 @@ def platform_check(project: Project) -> PlatformReport:
     failures += [f"{d.platform} is included without a reason" for d in included if not d.reason]
     failures += [f"{p} was stated by the client but is not included"
                  for p in client_platforms(project) if p not in {d.platform for d in included}]
+    failures += [f"{d.platform} is included but serves no requirement" for d in included if not d.requirement_ids]
     served = {rid for d in included for rid in d.requirement_ids}
     failures += [f"{r.id} is not served by any included platform: \"{r.text[:80]}\""
                  for r in project.requirements if r.kind == "functional" and r.id not in served]

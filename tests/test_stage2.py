@@ -43,6 +43,7 @@ def test_stage2_builds_a_matrix_that_obeys_the_rules(deps):
     assert list(rows)[:5] == list(CORE_PLATFORMS)
     # The client stated android and ios (fake intake); the model dropped ios, code kept it.
     assert rows["ios"].included and rows["ios"].source == "client"
+    assert rows["ios"].requirement_ids == rows["android"].requirement_ids == ["REQ-001"]  # mirrored
     assert rows["android"].source == "client"
     assert not rows["web"].included
     assert rows["admin_panel"].requirement_ids == ["REQ-001"]  # unknown REQ-999 dropped
@@ -86,6 +87,15 @@ def test_check_flags_unserved_requirements_and_missing_rows():
     assert any("REQ-002" in f for f in failures)
     assert not any("No decision" in f for f in failures)  # missing core rows are added as "no"
     assert sum("no decision returned" in n for n in notes) == 4
+
+
+def test_check_flags_an_included_platform_with_no_requirements():
+    project = _project([], ["REQ-001"])
+    project.platform_matrix, _ = build_matrix(project, {"platforms": [
+        {"platform": "web", "included": True, "reason": "r", "requirement_ids": ["REQ-001"]},
+        {"platform": "backend", "included": True, "reason": "r", "requirement_ids": []},
+    ]})
+    assert platform_check(project).failures == ["backend is included but serves no requirement"]
 
 
 def test_mobile_means_android_and_ios():

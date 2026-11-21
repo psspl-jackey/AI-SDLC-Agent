@@ -18,6 +18,7 @@ class Settings:
     cost_output_per_mtok: float
     data_dir: Path
     max_tokens: int
+    risk_buffer_pct: float = 15.0
 
     @property
     def projects_dir(self) -> Path:
@@ -39,4 +40,5 @@ def get_settings() -> Settings:
         cost_output_per_mtok=float(os.getenv("COST_OUTPUT_PER_MTOK", "0")),
         data_dir=Path(os.getenv("DATA_DIR", "./data")),
         max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
+        risk_buffer_pct=float(os.getenv("RISK_BUFFER_PCT", "15")),
     )

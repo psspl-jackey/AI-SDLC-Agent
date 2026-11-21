@@ -96,3 +96,84 @@ def platform_matrix_markdown(p: Project) -> str:
     out += ["## Platform check", "", "Passed." if report.passed else "Failed:"]
     out += [f"- {f}" for f in report.failures]
     return "\n".join(out) + "\n"
+
+
+def _fmt(h: float) -> str:
+    return f"{h:.0f}"
+
+
+def estimate_markdown(p: Project) -> str:
+    from .agents import estimator as est
+
+    e = p.estimate
+    out = [f"# Estimate: {p.name}", ""]
+    if e is None:
+        return "\n".join(out + ["Stage 3 has not run yet."]) + "\n"
+    base = est.totals(e.base())
+    out += [
+        f"**Base scope:** {base.tasks} tasks, {_fmt(base.hours_min)}-{_fmt(base.hours_max)} hours "
+        f"(likely {_fmt(base.hours_likely)}, expected {_fmt(base.expected)}).  ",
+        f"**With {e.risk_buffer_pct:g}% risk buffer:** {_fmt(est.with_buffer(base.expected, e.risk_buffer_pct))} hours.  ",
+        "Expected = (min + 4 x likely + max) / 6 per task. Team plan, timeline and cost need a rate card "
+        "and are not included yet.", "",
+        "## By module", "", "| Module | Tasks | Min | Likely | Max | Expected |", "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for name, t in est.totals(e.base(), "module").items():
+        out.append(f"| {name} | {t.tasks} | {_fmt(t.hours_min)} | {_fmt(t.hours_likely)} | {_fmt(t.hours_max)} | {_fmt(t.expected)} |")
+    out += ["", "## By platform", "", "| Platform | Tasks | Expected hours |", "| --- | --- | --- |"]
+    for name, t in est.totals(e.base(), "platform").items():
+        out.append(f"| {name.replace('_', ' ')} | {t.tasks} | {_fmt(t.expected)} |")
+    gaps = {g.id: g.description for g in p.gaps}
+    out += ["", "## Recommended additions (optional, not in the base total)", ""]
+    adds = est.totals(e.additions(), "gap_id")
+    if adds:
+        out += ["| Gap | Addition | Tasks | Expected hours |", "| --- | --- | --- | --- |"]
+        out += [f"| {gid} | {gaps.get(gid, '')} | {t.tasks} | {_fmt(t.expected)} |" for gid, t in adds.items()]
+    else:
+        out.append("None.")
+    report = est.estimate_check(p)
+    out += ["", "## Estimate check", "", "Passed." if report.passed else "Failed:"]
+    out += [f"- {f}" for f in report.failures]
+    return "\n".join(out) + "\n"
+
+
+def estimate_xlsx(p: Project) -> bytes:
+    """Estimate sheet: every task, plus summaries. Plain workbook until the company template arrives."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    from .agents import estimator as est
+
+    e = p.estimate
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tasks"
+    header = ["ID", "Module", "Feature", "Task", "Platform", "Role", "Min h", "Likely h", "Max h",
+              "Expected h", "Requirements", "Recommended addition (gap)"]
+    ws.append(header)
+    for t in (e.tasks if e else []):
+        ws.append([t.id, t.module, t.feature, t.title, t.platform, t.role, t.hours_min, t.hours_likely,
+                   t.hours_max, round(t.expected, 1), ", ".join(t.requirement_ids), t.gap_id or ""])
+    summary = wb.create_sheet("Summary")
+    summary.append(["Group", "Name", "Tasks", "Min h", "Likely h", "Max h", "Expected h"])
+    if e:
+        def row(group: str, name: str, t) -> None:
+            summary.append([group, name, t.tasks, round(t.hours_min, 1), round(t.hours_likely, 1),
+                            round(t.hours_max, 1), round(t.expected, 1)])
+        base = est.totals(e.base())
+        row("Total", "Base scope", base)
+        summary.append(["Total", f"Base scope with {e.risk_buffer_pct:g}% risk buffer", "", "", "", "",
+                        round(est.with_buffer(base.expected, e.risk_buffer_pct), 1)])
+        row("Total", "Recommended additions (optional)", est.totals(e.additions()))
+        for by, label in (("module", "Module"), ("platform", "Platform"), ("role", "Role")):
+            for name, t in est.totals(e.base(), by).items():
+                row(label, name, t)
+        for gid, t in est.totals(e.additions(), "gap_id").items():
+            row("Addition", gid, t)
+    for sheet in (ws, summary):
+        for cell in sheet[1]:
+            cell.font = Font(bold=True)
+        sheet.freeze_panes = "A2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

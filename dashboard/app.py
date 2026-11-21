@@ -1,4 +1,4 @@
-"""Dashboard v1 for the AI SDLC Agent (intake, Stage 1 and Gate 1, Stage 2 platform decision).
+"""Dashboard v1 for the AI SDLC Agent (intake through Stage 3 estimate and Gate 2).
 
 Run from the repo root:  streamlit run dashboard/app.py
 """
@@ -12,8 +12,12 @@ import streamlit as st
 from sdlc_agent import exports
 from sdlc_agent.gaps.register import coverage_check, gate_status
 from sdlc_agent.intake.questionnaire import build_questionnaire
+from sdlc_agent.agents import estimator
 from sdlc_agent.agents.platform_decision import platform_check
-from sdlc_agent.orchestrator import Deps, decide_gate1, finish_intake, run_stage1, run_stage2, start_intake
+from sdlc_agent.orchestrator import (
+    Deps, decide_gate, finish_intake, gate_failures, run_stage1, run_stage2, run_stage3, start_intake,
+)
+from sdlc_agent.orchestrator.pipeline import GATE_STAGE
 from sdlc_agent.questions.queue import answer_question, open_questions
 from sdlc_agent.state.models import GATE_APPROVERS, RawInput, Stage, StageStatus
 
@@ -62,7 +66,8 @@ with st.sidebar:
     page = None
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
-                                   "Gate 1 approval", "Platforms", "Deliverables", "Trace and cost"])
+                                   "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
+                                   "Deliverables", "Trace and cost"])
 
 
 # ---------- new project ----------
@@ -225,18 +230,27 @@ def gaps_screen(project) -> None:
                  column_config={"evidence_url": st.column_config.LinkColumn("Evidence")})
 
 
-def gate1_screen(project) -> None:
-    st.header("Gate 1 approval")
-    st.write("Approve the requirements, the competitor list, the buckets and the gap register. "
-             "Tech lead, delivery head and sales all need to approve.")
-    report = coverage_check(project)
-    if report.passed:
-        st.success("Coverage check passed.")
+GATE_TEXT = {
+    1: ("Approve the requirements, the competitor list, the buckets and the gap register.",
+        "Coverage check"),
+    2: ("Approve the platform matrix and the estimate, including the recommended additions offered to the "
+        "client. Client approval of the proposal follows once the proposal document is produced.",
+        "Platform and estimate checks"),
+}
+
+
+def gate_screen(project, gate: int) -> None:
+    st.header(f"Gate {gate} approval")
+    intro, check_name = GATE_TEXT[gate]
+    st.write(f"{intro} Tech lead, delivery head and sales all need to approve.")
+    failures = gate_failures(project, gate)
+    if not failures:
+        st.success(f"{check_name} passed.")
     else:
-        st.error("Coverage check failed. Fix these before approving:")
-        for f in report.failures:
+        st.error(f"{check_name} failed. Fix these before approving:")
+        for f in failures:
             st.write(f"- {f}")
-    decisions = gate_status(project, 1)
+    decisions = gate_status(project, gate)
     cols = st.columns(3)
     for col, role in zip(cols, GATE_APPROVERS):
         v = decisions[role]
@@ -245,14 +259,51 @@ def gate1_screen(project) -> None:
     role_label = st.selectbox("Approving as", [ROLE_LABELS[r] for r in GATE_APPROVERS])
     role = next(r for r in GATE_APPROVERS if ROLE_LABELS[r] == role_label)
     comment = st.text_area("Comment")
-    waiting = project.stage_status[Stage.REQUIREMENTS] in (StageStatus.WAITING_GATE, StageStatus.REJECTED)
+    waiting = project.stage_status[GATE_STAGE[gate]] in (StageStatus.WAITING_GATE, StageStatus.REJECTED)
     c1, c2 = st.columns(2)
-    if c1.button("Approve", type="primary", disabled=not (waiting and report.passed)):
-        decide_gate1(deps, project, role, True, comment)
+    if c1.button("Approve", type="primary", disabled=not (waiting and not failures)):
+        decide_gate(deps, project, gate, role, True, comment)
         st.rerun()
     if c2.button("Reject", disabled=not waiting):
-        decide_gate1(deps, project, role, False, comment)
+        decide_gate(deps, project, gate, role, False, comment)
         st.rerun()
+
+
+def estimate_screen(project) -> None:
+    st.header("Stage 3: estimate")
+    st.write("Tasks with min, likely and max hours. Totals, the expected value and the risk buffer are computed "
+             "by code. Recommended additions are estimated separately and are not in the base total.")
+    ready = project.stage_status[Stage.PLATFORM] is StageStatus.DONE
+    if not ready:
+        st.info("Run the platform decision (Platforms screen) first.")
+    label = "Run Stage 3" if project.estimate is None else "Run Stage 3 again"
+    if st.button(label, type="primary", disabled=not ready):
+        with st.spinner("Estimating"):
+            try:
+                run_stage3(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        st.rerun()
+    e = project.estimate
+    if e is None:
+        return
+    base, extra = estimator.totals(e.base()), estimator.totals(e.additions())
+    c = st.columns(4)
+    c[0].metric("Base tasks", base.tasks)
+    c[1].metric("Base hours (min-max)", f"{base.hours_min:.0f}-{base.hours_max:.0f}")
+    c[2].metric(f"Expected + {e.risk_buffer_pct:g}% buffer", f"{estimator.with_buffer(base.expected, e.risk_buffer_pct):.0f} h")
+    c[3].metric("Recommended additions", f"{extra.expected:.0f} h")
+    st.subheader("Base scope")
+    st.dataframe([{"ID": t.id, "Module": t.module, "Feature": t.feature, "Task": t.title, "Platform": t.platform,
+                   "Role": t.role, "Min": t.hours_min, "Likely": t.hours_likely, "Max": t.hours_max,
+                   "Expected": round(t.expected, 1), "Requirements": ", ".join(t.requirement_ids)}
+                  for t in e.base()], hide_index=True, width="stretch")
+    if e.additions():
+        st.subheader("Recommended additions (client opts in)")
+        st.dataframe([{"Gap": t.gap_id, "Task": t.title, "Platform": t.platform, "Min": t.hours_min,
+                       "Likely": t.hours_likely, "Max": t.hours_max, "Expected": round(t.expected, 1)}
+                      for t in e.additions()], hide_index=True, width="stretch")
 
 
 def platforms_screen(project) -> None:
@@ -298,6 +349,10 @@ def deliverables_screen(project) -> None:
                        file_name=f"{project.id}-questions.md")
     st.download_button("Platform matrix (.md)", exports.platform_matrix_markdown(project),
                        file_name=f"{project.id}-platforms.md", disabled=project.platform_matrix is None)
+    st.download_button("Estimate sheet (.xlsx)", exports.estimate_xlsx(project), file_name=f"{project.id}-estimate.xlsx",
+                       disabled=project.estimate is None)
+    st.download_button("Estimate summary (.md)", exports.estimate_markdown(project),
+                       file_name=f"{project.id}-estimate.md", disabled=project.estimate is None)
 
 
 def trace_screen(project) -> None:
@@ -321,7 +376,8 @@ else:
     current = deps.store.load(choice)
     {
         "Overview": overview, "Questions": questions_screen, "Requirements": requirements_screen,
-        "Gap register": gaps_screen, "Gate 1 approval": gate1_screen, "Platforms": platforms_screen,
+        "Gap register": gaps_screen, "Gate 1 approval": lambda p: gate_screen(p, 1), "Platforms": platforms_screen,
+        "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,
     }[page](current)

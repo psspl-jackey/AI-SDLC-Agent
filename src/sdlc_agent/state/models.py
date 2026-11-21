@@ -214,6 +214,41 @@ class PlatformMatrix(BaseModel):
         return [d for d in self.decisions if d.included]
 
 
+class EstimateTask(BaseModel):
+    id: str
+    module: str
+    feature: str
+    title: str
+    platform: str  # an included platform from the matrix, or "common" for cross-cutting work
+    role: str = ""  # e.g. mobile developer, backend developer, QA, designer, project manager
+    hours_min: float
+    hours_likely: float
+    hours_max: float
+    requirement_ids: list[str] = Field(default_factory=list)
+    gap_id: Optional[str] = None  # set for recommended additions (market gaps the client may opt into)
+
+    @property
+    def recommended(self) -> bool:
+        return self.gap_id is not None
+
+    @property
+    def expected(self) -> float:
+        """Three-point (PERT) expected hours."""
+        return (self.hours_min + 4 * self.hours_likely + self.hours_max) / 6
+
+
+class Estimate(BaseModel):
+    tasks: list[EstimateTask] = Field(default_factory=list)
+    risk_buffer_pct: float = 15.0
+    created_at: datetime = Field(default_factory=now)
+
+    def base(self) -> list[EstimateTask]:
+        return [t for t in self.tasks if not t.recommended]
+
+    def additions(self) -> list[EstimateTask]:
+        return [t for t in self.tasks if t.recommended]
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -229,6 +264,7 @@ class Project(BaseModel):
     questions: list[Question] = Field(default_factory=list)
     competitors: list[dict] = Field(default_factory=list)  # [{name, url, features: [...], researched_on}]
     platform_matrix: Optional[PlatformMatrix] = None  # Stage 2
+    estimate: Optional[Estimate] = None  # Stage 3
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(
         default_factory=lambda: {s: StageStatus.PENDING for s in Stage}

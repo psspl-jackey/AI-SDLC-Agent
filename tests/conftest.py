@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -74,6 +75,30 @@ class FakeLLM:
                 ],
                 "approach": "cross_platform", "approach_reason": "One codebase for Android and iOS",
             }
+        elif "senior estimator" in system:
+            if "cross-cutting" in prompt:
+                data = {"tasks": [
+                    {"module": "Cross-cutting", "feature": "Setup", "title": "Project setup and CI", "role": "tech lead",
+                     "hours_min": 8, "hours_likely": 12, "hours_max": 20, "requirement_ids": []},
+                    {"module": "Cross-cutting", "feature": "QA", "title": "Test plan and regression", "role": "QA",
+                     "hours_min": 16, "hours_likely": 24, "hours_max": 40, "requirement_ids": []},
+                ]}
+            elif "recommended additions" in prompt:
+                gap_ids = sorted(set(re.findall(r"^(GAP-\d+):", prompt, re.MULTILINE)))
+                data = {"tasks": [
+                    {"module": "Additions", "feature": gid, "title": f"Build {gid}", "role": "mobile developer",
+                     "hours_min": 4, "hours_likely": 8, "hours_max": 16, "requirement_ids": [],
+                     "gap_id": gid, "platform": "android"} for gid in gap_ids
+                ]}
+            else:
+                platform = re.search(r"Estimate the (.+?) work", prompt).group(1)
+                data = {"tasks": [
+                    {"module": "Ads", "feature": "Post an ad", "title": f"Post-ad flow ({platform})",
+                     "role": "developer", "hours_min": 24, "hours_likely": 16, "hours_max": 40,  # unordered on purpose
+                     "requirement_ids": ["REQ-001"]},
+                    {"module": "Ads", "feature": "Post an ad", "title": "Broken row", "role": "developer",
+                     "hours_min": 0, "hours_likely": 0, "hours_max": 0, "requirement_ids": ["REQ-001"]},
+                ]}
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:

@@ -27,7 +27,10 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Reading images and screenshots | Not yet (needs a vision model) |
 | Automatic competitor discovery by web search | Not yet (search provider not chosen) |
 | Stage 2 platform decision: platform matrix with reasons, code-enforced platform check | Working |
-| Stages 3 to 9 | Later phases |
+| Stage 3 estimate: tasks with min-likely-max hours, totals and risk buffer in code, recommended additions separate, .xlsx sheet | Working (hours only; cost needs a rate card) |
+| Gate 2 approval by all three roles, blocked while checks fail | Working (client approval step to come) |
+| Proposal doc and PPT in company templates | Waiting for template files |
+| Stages 4 to 9 | Later phases |
 
 ## Setup (macOS)
 
@@ -123,4 +126,4 @@ tests/                   unit, pipeline and dashboard tests
 2. Run the eval on the local model (`python -m sdlc_agent.evals samples/*.answers.yaml`) and tune prompts.
 3. Choose a free search option for automatic competitor discovery and plug it into `SearchProvider`.
 4. Add a vision-capable model for screenshots and wireframes.
-5. Phase 2: estimator, proposal doc and PPT in Prakash Infotech templates, Gate 2 (platform decision is done).
+5. Phase 2: rate card (team, timeline, cost), proposal doc and PPT in Prakash Infotech templates, client approval.

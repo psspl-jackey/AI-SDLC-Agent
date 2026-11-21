@@ -1,4 +1,5 @@
-"""Orchestrator: Stage 0 (intake), Stage 1 (requirements and gap analysis) and Gate 1, Stage 2 (platforms).
+"""Orchestrator: Stage 0 (intake), Stage 1 (requirements and gap analysis) and Gate 1, Stage 2 (platforms),
+Stage 3 (estimate) and Gate 2.
 
 Stage 1 is a LangGraph graph:
 
@@ -15,7 +16,7 @@ from typing import Any, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from ..agents import domain_research, platform_decision, requirements_analyst, reviewer
+from ..agents import domain_research, estimator, platform_decision, requirements_analyst, reviewer
 from ..config import Settings, get_settings
 from ..gaps.register import add_gap, coverage_check, gate_passed, gate_status
 from ..intake.brief import apply_intake_answers, build_brief, completeness_of, extract_sow_lines
@@ -171,9 +172,8 @@ def run_stage1(deps: Deps, project_id: str) -> Project:
     # Re-running Stage 1 starts from a clean slate; intake results are kept.
     project.requirements, project.gaps, project.assumptions = [], [], []
     project.questions, project.competitors = [], []
-    # Stage 2 was built on the old requirements, so it must run again after the new Gate 1.
-    project.platform_matrix = None
-    project.stage_status[Stage.PLATFORM] = StageStatus.PENDING
+    # Later stages were built on the old requirements, so they must run again after the new Gate 1.
+    _reset_from(project, Stage.PLATFORM)
     for line in project.sow_lines:
         line.requirement_ids, line.not_a_requirement = [], False
     project.gate_decisions = [d for d in project.gate_decisions if d.gate != 1]
@@ -193,27 +193,55 @@ def run_stage1(deps: Deps, project_id: str) -> Project:
     return deps.store.load(project_id)
 
 
-# ---------- Gate 1 ----------
+# ---------- Gates ----------
 
-def decide_gate1(deps: Deps, project: Project, role: str, approved: bool, comment: str = "") -> Project:
-    if project.stage_status[Stage.REQUIREMENTS] not in (StageStatus.WAITING_GATE, StageStatus.REJECTED):
-        raise RuntimeError("Stage 1 is not waiting for Gate 1")
-    report = coverage_check(project)
-    if approved and not report.passed:
-        raise RuntimeError("Gate 1 cannot be approved while the coverage check has failures")
-    project.gate_decisions.append(GateDecision(gate=1, role=role, approved=approved, comment=comment))
+GATE_STAGE = {1: Stage.REQUIREMENTS, 2: Stage.PROPOSAL}
+
+
+def gate_failures(project: Project, gate: int) -> list[str]:
+    """Code checks that must pass before a gate can be approved."""
+    if gate == 1:
+        return coverage_check(project).failures
+    if gate == 2:
+        return platform_decision.platform_check(project).failures + estimator.estimate_check(project).failures
+    raise ValueError(f"Unknown gate {gate}")
+
+
+def decide_gate(deps: Deps, project: Project, gate: int, role: str, approved: bool, comment: str = "") -> Project:
+    stage = GATE_STAGE[gate]
+    if project.stage_status[stage] not in (StageStatus.WAITING_GATE, StageStatus.REJECTED):
+        raise RuntimeError(f"Nothing is waiting for Gate {gate}")
+    if approved and gate_failures(project, gate):
+        raise RuntimeError(f"Gate {gate} cannot be approved while its checks have failures")
+    project.gate_decisions.append(GateDecision(gate=gate, role=role, approved=approved, comment=comment))
     if not approved:
-        project.stage_status[Stage.REQUIREMENTS] = StageStatus.REJECTED
-        project.log(f"Gate 1 rejected by {role}: {comment}")
-    elif gate_passed(project, 1):
-        project.stage_status[Stage.REQUIREMENTS] = StageStatus.APPROVED
-        project.log("Gate 1 approved by tech lead, delivery head and sales")
+        project.stage_status[stage] = StageStatus.REJECTED
+        project.log(f"Gate {gate} rejected by {role}: {comment}")
+    elif gate_passed(project, gate):
+        project.stage_status[stage] = StageStatus.APPROVED
+        project.log(f"Gate {gate} approved by tech lead, delivery head and sales")
     else:
-        project.stage_status[Stage.REQUIREMENTS] = StageStatus.WAITING_GATE
-        waiting = [r for r, v in gate_status(project, 1).items() if v is not True]
-        project.log(f"Gate 1 approved by {role}; waiting for {', '.join(waiting)}")
+        project.stage_status[stage] = StageStatus.WAITING_GATE
+        waiting = [r for r, v in gate_status(project, gate).items() if v is not True]
+        project.log(f"Gate {gate} approved by {role}; waiting for {', '.join(waiting)}")
     deps.store.save(project)
     return project
+
+
+def decide_gate1(deps: Deps, project: Project, role: str, approved: bool, comment: str = "") -> Project:
+    return decide_gate(deps, project, 1, role, approved, comment)
+
+
+def _reset_from(project: Project, stage: Stage) -> None:
+    """A stage re-runs on new inputs, so everything after it must run again."""
+    order = [Stage.PLATFORM, Stage.PROPOSAL]
+    for s in order[order.index(stage):] if stage in order else []:
+        project.stage_status[s] = StageStatus.PENDING
+        if s is Stage.PLATFORM:
+            _clear_stage2(project)
+        if s is Stage.PROPOSAL:
+            project.estimate = None
+            project.gate_decisions = [d for d in project.gate_decisions if d.gate != 2]
 
 
 # ---------- Stage 2: platform decision (no gate of its own; reviewed at Gate 2) ----------
@@ -231,7 +259,7 @@ def run_stage2(deps: Deps, project_id: str) -> Project:
     project = deps.store.load(project_id)
     if project.stage_status[Stage.REQUIREMENTS] is not StageStatus.APPROVED:
         raise RuntimeError("Gate 1 must be approved before the platform decision (Stage 2)")
-    _clear_stage2(project)
+    _reset_from(project, Stage.PLATFORM)
     project.stage_status[Stage.PLATFORM] = StageStatus.RUNNING
     deps.store.save(project)
     deps.tracer.record(project_id, {"type": "stage_start", "stage": Stage.PLATFORM.value})
@@ -254,4 +282,39 @@ def run_stage2(deps: Deps, project_id: str) -> Project:
     )
     deps.store.save(project)
     deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.PLATFORM.value})
+    return project
+
+
+# ---------- Stage 3: estimate, then Gate 2 ----------
+
+def run_stage3(deps: Deps, project_id: str) -> Project:
+    project = deps.store.load(project_id)
+    if project.stage_status[Stage.PLATFORM] is not StageStatus.DONE:
+        raise RuntimeError("Run the platform decision (Stage 2) before the estimate (Stage 3)")
+    _reset_from(project, Stage.PROPOSAL)
+    project.stage_status[Stage.PROPOSAL] = StageStatus.RUNNING
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_start", "stage": Stage.PROPOSAL.value})
+    try:
+        result = estimator.run(deps.llm_for(project.id, estimator.NAME), project)
+    except Exception as exc:
+        project.stage_status[Stage.PROPOSAL] = StageStatus.FAILED
+        project.log(f"Stage 3 failed: {exc!r}")
+        deps.store.save(project)
+        deps.tracer.record(project_id, {"type": "stage_failed", "stage": Stage.PROPOSAL.value, "error": repr(exc)})
+        raise
+    estimator.apply(project, result, deps.settings.risk_buffer_pct)
+    e = project.estimate
+    base, extra = estimator.totals(e.base()), estimator.totals(e.additions())
+    failures = gate_failures(project, 2)
+    project.stage_status[Stage.PROPOSAL] = StageStatus.WAITING_GATE
+    project.log(
+        f"Estimate: {base.tasks} tasks, {base.hours_min:.0f}-{base.hours_max:.0f} h "
+        f"(expected {base.expected:.0f} h, {estimator.with_buffer(base.expected, e.risk_buffer_pct):.0f} h with "
+        f"{e.risk_buffer_pct:g}% buffer); recommended additions {extra.expected:.0f} h. "
+        + ("Gate 2 is open for approval." if not failures
+           else f"{len(failures)} check issue(s) to fix before Gate 2 can be approved.")
+    )
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.PROPOSAL.value})
     return project
