@@ -3,14 +3,14 @@ aliases: [e-commerce, ecommerce, online store, shop, shopping, d2c, retail]
 features:
   - {id: EC-01, name: Product catalogue with categories, tier: table_stakes}
   - {id: EC-02, name: Search and filters, tier: table_stakes}
-  - {id: EC-03, name: Product detail with images and variants (size, colour), tier: table_stakes}
+  - {id: EC-03, name: "Product detail with images and variants (size, colour)", tier: table_stakes}
   - {id: EC-04, name: Cart and wishlist, tier: table_stakes}
   - {id: EC-05, name: Checkout with address management, tier: table_stakes}
   - {id: EC-06, name: Payment (dummy gateway for now), tier: table_stakes}
   - {id: EC-07, name: Order history and order tracking, tier: table_stakes}
   - {id: EC-08, name: Returns and cancellations, tier: table_stakes}
   - {id: EC-09, name: User login (phone OTP or email), tier: table_stakes}
-  - {id: EC-10, name: Admin panel for products, orders, inventory, tier: table_stakes}
+  - {id: EC-10, name: "Admin panel for products, orders, inventory", tier: table_stakes}
   - {id: EC-11, name: Order and delivery notifications, tier: table_stakes}
   - {id: EC-12, name: Ratings and reviews, tier: common}
   - {id: EC-13, name: Coupons and offers, tier: common}

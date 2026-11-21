@@ -6,7 +6,7 @@ many false gaps they raise.
 
 | File | Form | Domain | Status |
 | --- | --- | --- | --- |
-| `one_line_classifieds.txt` | One-line idea | Classifieds | Input ready; answer key to write |
+| `one_line_classifieds.txt` + `one_line_classifieds.answers.yaml` | One-line idea | Classifieds | Draft key; needs senior review |
 | `ecommerce_brief.md` + `ecommerce_brief.answers.yaml` | Short brief | E-commerce | Ready |
 | Full Word SOW | Word document | Business tool | To write (senior person) |
 | Reference website link | URL | Any | To pick |
@@ -26,7 +26,9 @@ See `ecommerce_brief.answers.yaml` for a full example.
 - `also_valid`: real gaps that were not planted. They are not counted as false gaps.
 
 `match` is a list of term groups: an item matches when every group has at least one term at the start
-of a word in the gap (description or client question) or requirement text, case-insensitive. Add a
+of a word in the gap (description or client question) or requirement text, case-insensitive. An
+optional `exclude` list rejects a text containing any of its terms, for overlaps such as "chat" vs
+"push notifications for chats". Add a
 test wording to `tests/test_evals.py` for each planted gap so a change to the terms cannot silently
 break matching.
 

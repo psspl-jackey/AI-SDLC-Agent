@@ -38,3 +38,13 @@ def test_ollama_errors_say_what_to_do(monkeypatch):
     monkeypatch.setattr(httpx, "post", refuse)
     with pytest.raises(RuntimeError, match="ollama serve"):
         client.complete("s", "p")
+
+
+def test_pack_entries_have_exactly_id_name_tier():
+    # An unquoted comma inside a YAML flow mapping silently splits a feature name into extra keys.
+    for name, pack in load_packs().items():
+        for feat in pack.get("features", []):
+            assert set(feat) == {"id", "name", "tier"}, f"{name} {feat.get('id')}: quote the name"
+            assert feat["tier"] in ("table_stakes", "common"), f"{name} {feat['id']}"
+        for c in pack.get("compliance", []) or []:
+            assert set(c) == {"region", "note"}, f"{name} compliance: {c}"

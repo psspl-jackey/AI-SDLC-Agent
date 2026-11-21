@@ -1,0 +1,154 @@
+# Answer key: one_line_classifieds.txt (one-line idea, classifieds, Gujarat)
+#
+# STATUS: DRAFT written by Claude Code from the classifieds domain pack and the NFR checklist.
+# A senior person must review it before its scores are trusted: remove anything a senior analyst
+# would not raise for this input, add anything missing, then delete this STATUS line.
+#
+# A one-line input plants every gap by omission. With thin input the intake agent infers features;
+# those enter the register as "inferred" gaps, and they count as found here, because surfacing them
+# for confirmation at Gate 1 is the designed behaviour.
+#
+# Competitor and review-mined gaps are not scored: the eval gives no competitor links and automatic
+# competitor search is not set up yet.
+#
+# match / exclude: see samples/README.md.
+
+name: one_line_classifieds
+input: {kind: file, value: one_line_classifieds.txt}
+
+# A client who sent one line would answer the basics. Platforms, deadline, budget, expected scale and
+# must-have features are left blank: they are planted gaps.
+intake_answers:
+  domain: classifieds
+  region: Gujarat, India
+  intent: like_reference
+  target_users: buyers, sellers
+
+gaps:
+  # SOW gaps: what the one line leaves undefined
+  - id: P-01
+    type: sow
+    text: Platforms not stated (Android, iOS, web)
+    match: [[platform, android, ios]]
+  - id: P-02
+    type: sow
+    text: Login and registration method not stated
+    match: [[login, log in, sign in, sign-in, sign up, signup, registration, authentication, otp]]
+  - id: P-03
+    type: sow
+    text: Item categories not defined (vehicles, mobiles, property, jobs...)
+    match: [[categor]]
+    exclude: [filter, search]
+  - id: P-04
+    type: sow
+    text: Business model not stated (free listings, featured or boosted ads, premium)
+    match: [[monetis, monetiz, revenue, business model, featured, boost, premium, paid listing, paid ad]]
+  - id: P-05
+    type: sow
+    text: Languages not stated (Gujarati, Hindi, English)
+    match: [[language, gujarati, hindi, multilingual, multi-language, locali]]
+  # NFR gaps
+  - id: P-06
+    type: nfr
+    text: No expected user scale
+    match: [[scale, scalab, concurrent, number of users, how many users, user base, traffic]]
+  - id: P-07
+    type: nfr
+    text: Image upload and listing load on slow mobile networks
+    match: [[image, photo, picture], [compress, slow, size, network, bandwidth, load]]
+  - id: P-08
+    type: nfr
+    text: Personal data protection and account deletion (DPDP Act, 2023)
+    match: [[privacy, personal data, data protection, dpdp, deletion, delete account, retention]]
+  - id: P-09
+    type: nfr
+    text: IT (Intermediary Guidelines) Rules, 2021 - grievance officer and takedown process
+    match: [[intermediary, grievance, takedown]]
+  - id: P-10
+    type: nfr
+    text: Spam and fake-listing detection
+    match: [[spam, fake, fraud, scam]]
+  # Domain checklist gaps, table stakes
+  - id: P-11
+    type: domain_checklist
+    text: Search with filters (CL-03)
+    match: [[search, filter]]
+    exclude: [saved search]
+  - id: P-12
+    type: domain_checklist
+    text: Location-based listings (CL-04)
+    match: [[location, nearby, near me, city, geo, distance]]
+    exclude: [filter, search]
+  - id: P-13
+    type: domain_checklist
+    text: In-app buyer-seller chat (CL-05)
+    match: [[chat, messag, contact seller, contact the seller]]
+    exclude: [notif]
+  - id: P-14
+    type: domain_checklist
+    text: My ads - edit, mark as sold, delete (CL-07)
+    match: [[my ads, mark as sold, sold, edit ad, edit their ad, manage ads, manage their ads, delete ad, delete their ad]]
+  - id: P-15
+    type: domain_checklist
+    text: Favourites or saved ads (CL-08)
+    match: [[favourite, favorite, saved ad, shortlist, bookmark, wishlist, wish list]]
+  - id: P-16
+    type: domain_checklist
+    text: Report ad or user (CL-09)
+    match: [[report], [ad, ads, user, listing, abuse]]
+    exclude: [analytics]
+  - id: P-17
+    type: domain_checklist
+    text: Admin moderation of ads and users (CL-10)
+    match: [[moderat, approve ads, approval of ads, review ads]]
+  - id: P-18
+    type: domain_checklist
+    text: Push notifications for chats and ad status (CL-11)
+    match: [[notif, alert, push]]
+    exclude: [saved search]
+  # Domain checklist gaps, common
+  - id: P-19
+    type: domain_checklist
+    text: Seller profile and ratings (CL-12)
+    match: [[rating, seller profile, reputation, feedback]]
+  - id: P-20
+    type: domain_checklist
+    text: Seller or phone verification badge (CL-13)
+    match: [[verif, badge, kyc]]
+    exclude: [login, sign in, sign-in]
+
+requirements:
+  - id: R-01
+    text: Sellers can post an ad for a used item, with photos
+    match: [[post, list, sell, upload, create], [ad, ads, item, listing, product]]
+  - id: R-02
+    text: Buyers can browse or search ads
+    match: [[browse, search, find, view], [ad, ads, item, listing, product]]
+  - id: R-03
+    text: Buyers can contact the seller
+    match: [[chat, contact, call, messag]]
+  - id: R-04
+    text: Users have accounts (buyers and sellers)
+    match: [[account, regist, login, sign up, sign in, profile]]
+  - id: R-05
+    text: Listings are for Gujarat (region or location aware)
+    match: [[gujarat, location, city, region]]
+
+also_valid:
+  - {id: V-01, text: Saved searches with alerts, match: [[saved search]]}
+  - {id: V-02, text: Share ad to social apps, match: [[share, sharing]]}
+  - {id: V-03, text: Competitor list needed (research could not run), match: [[competitor, reference app]]}
+  - {id: V-04, text: Security, match: [[security, secure, encrypt]]}
+  - {id: V-05, text: Accessibility, match: [[accessib]]}
+  - {id: V-06, text: Offline or poor network, match: [[offline, connectivity]]}
+  - {id: V-07, text: Availability, uptime and backup, match: [[availability, uptime, backup, recovery]]}
+  - {id: V-08, text: Analytics, match: [[analytics, tracking]]}
+  - {id: V-09, text: Devices and OS versions, match: [[device, os version, android version, ios version, tablet, browser]]}
+  - {id: V-10, text: Hosting and environments, match: [[hosting, cloud, server, environment, staging]]}
+  - {id: V-11, text: Maintenance and support, match: [[maintenance, support]]}
+  - {id: V-12, text: Payments (dummy gateway for now), match: [[payment, pay]]}
+  - {id: V-13, text: Deadline and budget, match: [[deadline, budget, timeline, launch, cost]]}
+  - {id: V-14, text: Admin panel and roles, match: [[admin]]}
+  - {id: V-15, text: Category browsing (CL-02), match: [[categor]]}
+  - {id: V-16, text: Performance targets, match: [[performance, response time, fast, speed]]}
+  - {id: V-17, text: What "like OLX" covers, match: [[olx]]}

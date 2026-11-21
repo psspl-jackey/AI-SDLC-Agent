@@ -4,7 +4,7 @@ features:
   - {id: BT-01, name: Role-based access control, tier: table_stakes}
   - {id: BT-02, name: User and team management, tier: table_stakes}
   - {id: BT-03, name: Dashboard with key metrics, tier: table_stakes}
-  - {id: BT-04, name: Create, edit, list, search records, tier: table_stakes}
+  - {id: BT-04, name: "Create, edit, list, search records", tier: table_stakes}
   - {id: BT-05, name: Export to Excel or PDF, tier: table_stakes}
   - {id: BT-06, name: Audit log of changes, tier: table_stakes}
   - {id: BT-07, name: Email or in-app notifications, tier: table_stakes}

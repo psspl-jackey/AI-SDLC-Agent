@@ -113,3 +113,46 @@ def test_cli_runs_stage0_and_stage1_and_writes_reports(tmp_path, settings, fake_
     text = reports[0].read_text()
     assert "**missed** | P-3" in text and "Gate 1 coverage check: passed" in text
     assert list((settings.data_dir / "reports").glob("*-classifieds_fake.json"))
+
+
+# Expected planted gap for each classifieds pack item, worded exactly as domain_research words it.
+CLASSIFIEDS_PACK_EXPECTED = {
+    "CL-01": None, "CL-02": "P-03", "CL-03": "P-11", "CL-04": "P-12", "CL-05": "P-13", "CL-06": "P-02",
+    "CL-07": "P-14", "CL-08": "P-15", "CL-09": "P-16", "CL-10": "P-17", "CL-11": "P-18", "CL-12": "P-19",
+    "CL-13": "P-20", "CL-14": "P-04", "CL-15": None, "CL-16": None, "CL-17": "P-05",
+}
+
+
+def test_classifieds_pack_wordings_match_one_planted_gap_each():
+    from sdlc_agent.domain_packs import load_packs
+
+    key = load_key(SAMPLES / "one_line_classifieds.answers.yaml")
+    pack = load_packs()["classifieds"]
+    assert {f["id"] for f in pack["features"]} == set(CLASSIFIEDS_PACK_EXPECTED)
+    for feat in pack["features"]:
+        text = f"{feat['name']} ({feat['id']}) is not in the brief"
+        expected = CLASSIFIEDS_PACK_EXPECTED[feat["id"]]
+        assert [g.id for g in key.gaps if g.matches(text)] == ([expected] if expected else []), text
+    notes = [f"Compliance check: {c['note']}" for c in pack["compliance"]]
+    assert [[g.id for g in key.gaps if g.matches(n)] for n in notes] == [["P-08"], ["P-09"]]
+
+
+@pytest.mark.parametrize("wording, expected", [
+    ("Target platforms (Android, iOS, web) are not stated", "P-01"),
+    ("Login method is not defined", "P-02"),
+    ("Item categories are not defined", "P-03"),
+    ("No revenue model: are listings free or are there paid featured ads?", "P-04"),
+    ("Gujarati language support is not stated", "P-05"),
+    ("No expected number of users", "P-06"),
+    ("Images should be compressed for slow mobile networks", "P-07"),
+    ("No spam or fake listing detection", "P-10"),
+])
+def test_classifieds_sow_and_nfr_wordings(wording, expected):
+    key = load_key(SAMPLES / "one_line_classifieds.answers.yaml")
+    assert [g.id for g in key.gaps if g.matches(wording)] == [expected]
+
+
+def test_exclude_terms_reject_a_match():
+    item = KeyItem(id="X", text="", match=(("chat",),), exclude=("notif",))
+    assert item.matches("In-app buyer-seller chat")
+    assert not item.matches("Push notifications for chats")

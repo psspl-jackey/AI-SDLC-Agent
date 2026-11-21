@@ -6,7 +6,8 @@ code (no LLM judge), so scores are reproducible and comparable across models and
 
 Match rule: `match` is a list of term groups. An item matches a text when every group has at
 least one term that appears in the text at the start of a word (case-insensitive), so "notif"
-matches "notifications" and "fast" does not match "breakfast".
+matches "notifications" and "fast" does not match "breakfast". An optional `exclude` list rejects
+texts that contain any of its terms (e.g. "chat" but not "notifications for chats").
 
 Usage:
     python -m sdlc_agent.evals samples/ecommerce_brief.answers.yaml [more keys...]
@@ -35,8 +36,11 @@ class KeyItem:
     text: str
     match: tuple[tuple[str, ...], ...]
     type: str = ""
+    exclude: tuple[str, ...] = ()
 
     def matches(self, haystack: str) -> bool:
+        if any(_has_term(haystack, t) for t in self.exclude):
+            return False
         return all(any(_has_term(haystack, t) for t in group) for group in self.match)
 
 
@@ -66,6 +70,7 @@ def _items(raw: list | None, section: str, path: Path) -> tuple[KeyItem, ...]:
             text=str(entry.get("text", "")),
             type=str(entry.get("type", "")),
             match=tuple(tuple(str(t) for t in g) for g in groups),
+            exclude=tuple(str(t) for t in entry.get("exclude") or ()),
         ))
     ids = [it.id for it in items]
     if len(ids) != len(set(ids)):

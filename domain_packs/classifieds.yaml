@@ -3,11 +3,11 @@ aliases: [classified, classifieds, marketplace, olx, buy and sell, listings]
 features:
   - {id: CL-01, name: Post an ad with photos, tier: table_stakes}
   - {id: CL-02, name: Category and sub-category browsing, tier: table_stakes}
-  - {id: CL-03, name: Search with filters (price, location, category, condition), tier: table_stakes}
+  - {id: CL-03, name: "Search with filters (price, location, category, condition)", tier: table_stakes}
   - {id: CL-04, name: Location-based listings, tier: table_stakes}
   - {id: CL-05, name: In-app buyer-seller chat, tier: table_stakes}
   - {id: CL-06, name: User registration and login (phone OTP), tier: table_stakes}
-  - {id: CL-07, name: My ads (edit, mark as sold, delete), tier: table_stakes}
+  - {id: CL-07, name: "My ads (edit, mark as sold, delete)", tier: table_stakes}
   - {id: CL-08, name: Favourites or saved ads, tier: table_stakes}
   - {id: CL-09, name: Report ad or user, tier: table_stakes}
   - {id: CL-10, name: Admin moderation of ads and users, tier: table_stakes}
