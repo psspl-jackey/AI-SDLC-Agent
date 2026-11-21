@@ -30,6 +30,7 @@ not new agents.
   Gate 2 (opt-in additions become requirements, declined ones out of scope); change requests (text becomes input
   lines, change analyst adds/changes/removes requirements with stable ids, Gate 1 reopens, then only affected
   requirements are re-mapped and re-estimated).
+- Done (branch `feature/llm-json-hardening`, stacked): JSON retry and shape coercion for every model call.
 - Next: pull a model and run the eval to tune prompts; rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.
 
@@ -69,6 +70,8 @@ not new agents.
    estimated "Recommended additions"; the client opts in.
 6. Everything the system infers is tagged "inferred" and enters the gap register as ASSUMED.
 7. Every model call goes through `TracedLLM` (tracing + cost meter).
+   Agents ask for JSON with `llm/json_call.py::complete_json(llm, system, prompt, SHAPE)`, never raw
+   `parse_json`: it retries once on bad JSON and coerces small-model replies to the declared shape.
 8. Web research: public pages only, respect robots rules, never copy content or design.
 
 ## Code map
