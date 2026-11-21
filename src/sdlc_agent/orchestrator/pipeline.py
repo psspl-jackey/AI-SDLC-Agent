@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from ..agents import domain_research, estimator, platform_decision, requirements_analyst, reviewer, skills_setup, solution_design
+from ..agents import domain_research, estimator, planner, platform_decision, requirements_analyst, reviewer, skills_setup, solution_design
 from ..config import Settings, get_settings
 from ..gaps.register import add_gap, coverage_check, gate_passed, gate_status
 from ..intake.brief import apply_intake_answers, build_brief, completeness_of, extract_sow_lines
@@ -237,7 +237,7 @@ def decide_gate1(deps: Deps, project: Project, role: str, approved: bool, commen
 
 def _reset_from(project: Project, stage: Stage) -> None:
     """A stage re-runs on new inputs, so everything after it must run again."""
-    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS]
+    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN]
     for s in order[order.index(stage):] if stage in order else []:
         project.stage_status[s] = StageStatus.PENDING
         if s is Stage.PLATFORM:
@@ -251,6 +251,8 @@ def _reset_from(project: Project, stage: Stage) -> None:
             project.gate_decisions = [d for d in project.gate_decisions if d.gate != 3]
         if s is Stage.SKILLS:
             project.skill_pack = None
+        if s is Stage.PLAN:
+            project.plan = None
 
 
 def _supersede_pending_change(project: Project, by: str) -> None:
@@ -429,7 +431,7 @@ def submit_change_request(deps: Deps, project_id: str, text: str) -> Project:
     project.stage_status[Stage.REQUIREMENTS] = StageStatus.WAITING_GATE
     project.gate_decisions = [d for d in project.gate_decisions if d.gate not in (1, 2, 3)]
     project.client_decision = None
-    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS):
+    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN):
         if project.stage_status[s] is not StageStatus.PENDING:
             project.stage_status[s] = StageStatus.PENDING
     project.log(f"{cr.id} analysed: {len(cr.added)} added, {len(cr.changed)} changed, {len(cr.removed)} removed. "
@@ -548,4 +550,48 @@ def run_stage5(deps: Deps, project_id: str) -> Project:
                 + ("Skills check passed." if report.passed else f"Skills check: {'; '.join(report.failures)}"))
     deps.store.save(project)
     deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.SKILLS.value})
+    return project
+
+
+# ---------- Stage 6: internal plan and validation (tech lead review, non-blocking) ----------
+
+def run_stage6(deps: Deps, project_id: str) -> Project:
+    project = deps.store.load(project_id)
+    if project.stage_status[Stage.SKILLS] is not StageStatus.DONE:
+        raise RuntimeError("Run skills setup (Stage 5) before the internal plan (Stage 6)")
+    _reset_from(project, Stage.PLAN)
+    project.stage_status[Stage.PLAN] = StageStatus.RUNNING
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_start", "stage": Stage.PLAN.value})
+    try:
+        result = planner.run(deps.llm_for(project.id, planner.NAME), project)
+    except Exception as exc:
+        project.stage_status[Stage.PLAN] = StageStatus.FAILED
+        project.log(f"Stage 6 failed: {exc!r}")
+        deps.store.save(project)
+        deps.tracer.record(project_id, {"type": "stage_failed", "stage": Stage.PLAN.value, "error": repr(exc)})
+        raise
+    st = deps.settings
+    planner.apply(project, result, st.jira_project_key, st.sprint_weeks, st.sprint_capacity_hours)
+    report = planner.plan_check(project)
+    p = project.plan
+    project.stage_status[Stage.PLAN] = StageStatus.DONE
+    project.log(f"Plan: {len(p.tasks())} tickets in {p.sprint_count()} sprint(s) of {p.sprint_weeks} weeks "
+                f"({p.sprint_capacity_hours:g} h capacity). "
+                + ("Validation passed." if report.passed else f"Validation found {len(report.failures)} issue(s).")
+                + " Waiting for the tech lead's review (non-blocking).")
+    deps.store.save(project)
+    deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.PLAN.value})
+    return project
+
+
+def review_plan(deps: Deps, project: Project, approved: bool, comment: str = "") -> Project:
+    """The tech lead reviews the plan. Non-blocking: it is recorded, and work is not held for it."""
+    from ..state.models import PlanReview
+
+    if project.plan is None:
+        raise RuntimeError("There is no plan to review")
+    project.plan.review = PlanReview(approved=approved, comment=comment)
+    project.log(f"Tech lead {'approved' if approved else 'raised concerns on'} the plan: {comment}")
+    deps.store.save(project)
     return project

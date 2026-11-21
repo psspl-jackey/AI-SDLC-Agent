@@ -254,3 +254,54 @@ def skill_pack_zip(p: Project) -> bytes:
         for f in (p.skill_pack.files if p.skill_pack else []):
             zf.writestr(f"skills/{f.name}/SKILL.md", skill_markdown(f))
     return buf.getvalue()
+
+
+def jira_csv(p: Project) -> str:
+    """Tickets for the Jira CSV importer. Map the columns on import: Issue Id, Parent Id (epic link),
+    Issue Type, Summary, Description, Labels, Original Estimate (seconds), Sprint; "Depends on" lists
+    Issue Ids and can be mapped to a "blocks" issue link."""
+    plan = p.plan
+    if plan is None:
+        return ""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Issue Id", "Parent Id", "Issue Type", "Summary", "Description", "Labels",
+                     "Original Estimate", "Sprint", "Depends on"])
+    num = {t.id: i for i, t in enumerate(plan.tickets, start=1)}  # Jira wants numeric Issue Ids
+    for t in plan.tickets:
+        labels = " ".join([t.platform, *t.requirement_ids]).strip() if t.type == "task" else ""
+        writer.writerow([
+            num[t.id], num[t.epic_id] if t.epic_id else "", "Epic" if t.type == "epic" else "Task",
+            t.summary, t.description, labels,
+            int(round(t.hours * 3600)) if t.type == "task" else "",
+            f"{plan.jira_key} Sprint {t.sprint}" if t.sprint else "",
+            " ".join(str(num[d]) for d in t.depends_on),
+        ])
+    return buf.getvalue()
+
+
+def plan_markdown(p: Project) -> str:
+    from .agents.planner import plan_check
+
+    plan = p.plan
+    out = [f"# Internal plan: {p.name}", ""]
+    if plan is None:
+        return "\n".join(out + ["Stage 6 has not run yet."]) + "\n"
+    tasks = plan.tasks()
+    out += [f"Jira project: {plan.jira_key}. {len(tasks)} tickets in {plan.sprint_count()} sprint(s) of "
+            f"{plan.sprint_weeks} weeks; capacity {plan.sprint_capacity_hours:g} h per sprint.", ""]
+    if plan.review:
+        out += [f"Tech lead review: {'approved' if plan.review.approved else 'concerns'} "
+                f"({plan.review.reviewed_at:%Y-%m-%d}). {plan.review.comment}", ""]
+    epics = {t.id: t.summary for t in plan.tickets if t.type == "epic"}
+    for sprint in range(1, plan.sprint_count() + 1):
+        in_sprint = [t for t in tasks if t.sprint == sprint]
+        out += [f"## Sprint {sprint} ({sum(t.hours for t in in_sprint):.0f} h)", "",
+                "| Ticket | Epic | Summary | Hours | Requirements | Depends on |", "| --- | --- | --- | --- | --- | --- |"]
+        out += [f"| {t.id} | {epics.get(t.epic_id, '')} | {t.summary} | {t.hours:g} | {', '.join(t.requirement_ids)} | "
+                f"{', '.join(t.depends_on)} |" for t in in_sprint]
+        out.append("")
+    report = plan_check(p)
+    out += ["## Validation report", "", "Passed." if report.passed else "Failed:"]
+    out += [f"- {f}" for f in report.failures]
+    return "\n".join(out) + "\n"

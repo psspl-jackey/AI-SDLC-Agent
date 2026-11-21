@@ -35,7 +35,8 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Stage 4 solution design: stacks from tech packs, components, data model, API, screens and flows; architecture doc with diagrams | Working (wireframes as screen lists, not drawings) |
 | Gate 3 approval by all three roles, blocked while the design check fails | Working |
 | Stage 5 skills setup: project skill pack from tech packs, tailored rules added, Claude Code SKILL.md layout | Working |
-| Stages 6 to 9 | Later phases |
+| Stage 6 internal plan: tickets, dependencies, sprints, validation report, Jira CSV, tech lead review | Working (Jira by CSV import; placeholder key SDLC) |
+| Stages 7 to 9 | Later phases |
 
 ## Setup (macOS)
 

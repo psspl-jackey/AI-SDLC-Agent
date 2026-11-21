@@ -1,4 +1,4 @@
-"""Dashboard v1 for the AI SDLC Agent (intake through Stage 5 skills setup).
+"""Dashboard v1 for the AI SDLC Agent (intake through Stage 6 internal plan).
 
 Run from the repo root:  streamlit run dashboard/app.py
 """
@@ -12,11 +12,11 @@ import streamlit as st
 from sdlc_agent import exports
 from sdlc_agent.gaps.register import coverage_check, gate_status
 from sdlc_agent.intake.questionnaire import build_questionnaire
-from sdlc_agent.agents import estimator
+from sdlc_agent.agents import estimator, planner
 from sdlc_agent.agents.platform_decision import platform_check
 from sdlc_agent.orchestrator import (
     Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
-    run_stage2, run_stage3, run_stage4, run_stage5, start_intake, submit_change_request,
+    review_plan, run_stage2, run_stage3, run_stage4, run_stage5, run_stage6, start_intake, submit_change_request,
 )
 from sdlc_agent.orchestrator.pipeline import GATE_STAGE
 from sdlc_agent.questions.queue import answer_question, open_questions
@@ -68,7 +68,7 @@ with st.sidebar:
     if choice != "New project":
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
                                    "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
-                                   "Design", "Gate 3 approval", "Skills", "Change requests", "Deliverables",
+                                   "Design", "Gate 3 approval", "Skills", "Plan", "Change requests", "Deliverables",
                                    "Trace and cost"])
 
 
@@ -348,6 +348,60 @@ def skills_screen(project) -> None:
             st.markdown(f.content)
 
 
+def plan_screen(project) -> None:
+    st.header("Stage 6: internal plan")
+    st.write("Jira tickets from the estimate (one epic per module), dependencies, sprints and a validation report. "
+             "The tech lead reviews the plan; the review is recorded and does not hold the work.")
+    ready = project.stage_status[Stage.SKILLS] is StageStatus.DONE
+    if not ready:
+        st.info("Run skills setup (Stage 5) first.")
+    label = "Run Stage 6" if project.plan is None else "Run Stage 6 again"
+    if st.button(label, type="primary", disabled=not ready):
+        with st.spinner("Planning"):
+            try:
+                run_stage6(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        st.rerun()
+    plan = project.plan
+    if plan is None:
+        return
+    c = st.columns(4)
+    c[0].metric("Tickets", len(plan.tasks()))
+    c[1].metric("Sprints", plan.sprint_count())
+    c[2].metric("Sprint length", f"{plan.sprint_weeks} weeks")
+    c[3].metric("Capacity per sprint", f"{plan.sprint_capacity_hours:g} h")
+    if plan.jira_key == "SDLC":
+        st.caption("Jira key SDLC is a placeholder; set JIRA_PROJECT_KEY in .env once the project exists.")
+    report = planner.plan_check(project)
+    if report.passed:
+        st.success("Validation passed: every requirement maps to a ticket and the sprint order respects dependencies.")
+    else:
+        st.error("Validation found issues:")
+        for f in report.failures:
+            st.write(f"- {f}")
+    c1, c2 = st.columns(2)
+    c1.download_button("Jira import (.csv)", exports.jira_csv(project), file_name=f"{project.id}-jira.csv")
+    c2.download_button("Sprint plan (.md)", exports.plan_markdown(project), file_name=f"{project.id}-plan.md")
+    epics = {t.id: t.summary for t in plan.tickets if t.type == "epic"}
+    st.dataframe([{"Sprint": t.sprint, "Ticket": t.id, "Epic": epics.get(t.epic_id, ""), "Summary": t.summary,
+                   "Hours": t.hours, "Requirements": ", ".join(t.requirement_ids), "Depends on": ", ".join(t.depends_on)}
+                  for t in sorted(plan.tasks(), key=lambda t: (t.sprint or 0, t.id))], hide_index=True, width="stretch")
+    st.subheader("Tech lead review")
+    if plan.review:
+        st.write(f"**{'Approved' if plan.review.approved else 'Concerns raised'}** on "
+                 f"{plan.review.reviewed_at:%Y-%m-%d}. {plan.review.comment}")
+    note = st.text_area("Review comment", key="plan_review")
+    r1, r2 = st.columns(2)
+    if r1.button("Approve plan"):
+        review_plan(deps, project, True, note)
+        st.rerun()
+    if r2.button("Raise concerns"):
+        review_plan(deps, project, False, note)
+        st.rerun()
+
+
 def change_requests_screen(project) -> None:
     st.header("Change requests")
     st.write("A change re-enters at Stage 1: requirements are updated, Gate 1 opens again, and after approval "
@@ -472,6 +526,10 @@ def deliverables_screen(project) -> None:
                        file_name=f"{project.id}-architecture.md", disabled=project.design is None)
     st.download_button("Skill pack (.zip)", exports.skill_pack_zip(project), file_name=f"{project.id}-skills.zip",
                        disabled=project.skill_pack is None)
+    st.download_button("Jira import (.csv)", exports.jira_csv(project), file_name=f"{project.id}-jira.csv",
+                       disabled=project.plan is None, key="dl_jira")
+    st.download_button("Sprint plan (.md)", exports.plan_markdown(project), file_name=f"{project.id}-plan.md",
+                       disabled=project.plan is None, key="dl_plan")
 
 
 def trace_screen(project) -> None:
@@ -498,6 +556,7 @@ else:
         "Gap register": gaps_screen, "Gate 1 approval": lambda p: gate_screen(p, 1), "Platforms": platforms_screen,
         "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
         "Design": design_screen, "Gate 3 approval": lambda p: gate_screen(p, 3), "Skills": skills_screen,
+        "Plan": plan_screen,
         "Change requests": change_requests_screen,
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,

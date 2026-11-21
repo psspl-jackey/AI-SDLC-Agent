@@ -350,6 +350,42 @@ class SkillPack(BaseModel):
     created_at: datetime = Field(default_factory=now)
 
 
+class Ticket(BaseModel):
+    id: str  # T-001; Jira assigns the real key (e.g. SDLC-12) on import
+    type: Literal["epic", "task"]
+    summary: str
+    description: str = ""
+    epic_id: Optional[str] = None
+    task_id: Optional[str] = None  # the estimate task it comes from
+    requirement_ids: list[str] = Field(default_factory=list)
+    platform: str = ""
+    role: str = ""
+    hours: float = 0.0  # expected hours from the estimate
+    depends_on: list[str] = Field(default_factory=list)  # ticket ids
+    sprint: Optional[int] = None  # 1-based; epics have none
+
+
+class PlanReview(BaseModel):
+    approved: bool
+    comment: str = ""
+    reviewed_at: datetime = Field(default_factory=now)
+
+
+class Plan(BaseModel):
+    jira_key: str
+    sprint_weeks: int
+    sprint_capacity_hours: float
+    tickets: list[Ticket] = Field(default_factory=list)
+    review: Optional[PlanReview] = None  # tech lead review; non-blocking
+    created_at: datetime = Field(default_factory=now)
+
+    def tasks(self) -> list[Ticket]:
+        return [t for t in self.tickets if t.type == "task"]
+
+    def sprint_count(self) -> int:
+        return max((t.sprint or 0 for t in self.tasks()), default=0)
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -369,6 +405,7 @@ class Project(BaseModel):
     client_decision: Optional[ClientDecision] = None  # after Gate 2
     design: Optional[SolutionDesign] = None  # Stage 4
     skill_pack: Optional[SkillPack] = None  # Stage 5
+    plan: Optional[Plan] = None  # Stage 6
     change_requests: list[ChangeRequest] = Field(default_factory=list)
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(

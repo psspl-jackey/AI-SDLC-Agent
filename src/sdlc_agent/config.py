@@ -19,6 +19,9 @@ class Settings:
     data_dir: Path
     max_tokens: int
     risk_buffer_pct: float = 15.0
+    jira_project_key: str = "SDLC"
+    sprint_weeks: int = 2
+    sprint_capacity_hours: float = 240.0
 
     @property
     def projects_dir(self) -> Path:
@@ -41,4 +44,7 @@ def get_settings() -> Settings:
         data_dir=Path(os.getenv("DATA_DIR", "./data")),
         max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
         risk_buffer_pct=float(os.getenv("RISK_BUFFER_PCT", "15")),
+        jira_project_key=os.getenv("JIRA_PROJECT_KEY", "SDLC").strip().upper() or "SDLC",
+        sprint_weeks=int(os.getenv("SPRINT_WEEKS", "2")),
+        sprint_capacity_hours=float(os.getenv("SPRINT_CAPACITY_HOURS", "240")),
     )

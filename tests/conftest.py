@@ -153,6 +153,15 @@ class FakeLLM:
                 "testing": [f"Rule {i}" for i in range(9)],
                 "ci": [],
             }
+        elif "delivery planner" in system:
+            tasks = re.findall(r"^(TASK-\d+) \[(\S+)\] .*? / (.+)$", prompt, re.MULTILINE)
+            setup = next(t for t, _, title in tasks if title.startswith("Project setup"))
+            qa = next(t for t, _, title in tasks if title.startswith("Test plan"))
+            deps = [{"task": t, "depends_on": [setup]} for t, _, title in tasks if title.startswith("Post-ad")]
+            deps += [{"task": setup, "depends_on": [qa, setup, "TASK-999"]},  # cycle, self link, unknown
+                     {"task": qa, "depends_on": [setup]},
+                     {"task": "TASK-888", "depends_on": [setup]}]
+            data = {"dependencies": deps}
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:
