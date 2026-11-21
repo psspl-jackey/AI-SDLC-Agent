@@ -160,6 +160,9 @@ def test_dashboard_release_screen_records_results(deps, settings, monkeypatch):
     from conftest import FakeLLM
     from sdlc_agent.llm.ollama import OllamaClient
 
+    import streamlit as st
+
+    st.cache_resource.clear()  # the app caches its Deps; another test may have cached a different data folder
     monkeypatch.setenv("DATA_DIR", str(settings.data_dir))
     fake = FakeLLM()
     monkeypatch.setattr(OllamaClient, "complete",

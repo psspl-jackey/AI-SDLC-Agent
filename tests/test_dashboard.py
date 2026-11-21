@@ -12,6 +12,9 @@ APP = str(Path(__file__).resolve().parents[1] / "dashboard" / "app.py")
 
 
 def test_dashboard_screens_and_gate1(settings, monkeypatch):
+    import streamlit as st
+
+    st.cache_resource.clear()  # the app caches its Deps; another test may have cached a different data folder
     monkeypatch.setenv("DATA_DIR", str(settings.data_dir))
     monkeypatch.setenv("MODEL_PROVIDER", "ollama")
     fake = FakeLLM()
