@@ -442,6 +442,26 @@ class Release(BaseModel):
     created_at: datetime = Field(default_factory=now)
 
 
+class RunbookItem(BaseModel):
+    task: str
+    when: str = ""
+    steps: list[str] = Field(default_factory=list)
+
+
+class ClientSignoff(BaseModel):
+    accepted: bool
+    signed_by: str
+    comment: str = ""
+    signed_at: datetime = Field(default_factory=now)
+
+
+class Handover(BaseModel):
+    version: str = ""
+    runbook: list[RunbookItem] = Field(default_factory=list)  # project-specific, added by the model
+    signoff: Optional[ClientSignoff] = None
+    created_at: datetime = Field(default_factory=now)
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -464,6 +484,7 @@ class Project(BaseModel):
     plan: Optional[Plan] = None  # Stage 6
     builds: list[BuildRecord] = Field(default_factory=list)  # Stage 7; kept as history across re-plans
     release: Optional[Release] = None  # Stage 8
+    handover: Optional[Handover] = None  # Stage 9
     change_requests: list[ChangeRequest] = Field(default_factory=list)
     gate_decisions: list[GateDecision] = Field(default_factory=list)
     stage_status: dict[Stage, StageStatus] = Field(

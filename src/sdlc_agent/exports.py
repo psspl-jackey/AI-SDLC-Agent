@@ -339,3 +339,36 @@ def test_report_csv(p: Project) -> str:
                   "requirements": ", ".join(c.requirement_ids), "steps": " | ".join(c.steps), "expected": c.expected,
                   "result": c.result or "", "note": c.note, "run_at": c.run_at.isoformat() if c.run_at else ""}
                  for c in (rel.test_cases if rel else [])])
+
+
+def handover_zip(p: Project) -> bytes:
+    """Everything the client receives at handover, in one archive."""
+    import zipfile
+
+    from . import traceability
+    from .agents.handover import handover_markdown, maintenance_markdown
+    from .agents.skills_setup import skill_markdown
+
+    files: dict[str, str | bytes] = {
+        "handover.md": handover_markdown(p),
+        "maintenance-guide.md": maintenance_markdown(p),
+        "requirements.md": requirements_markdown(p),
+        "gap-register.csv": gaps_csv(p),
+        "client-questions.md": questions_markdown(p),
+        "platform-matrix.md": platform_matrix_markdown(p),
+        "estimate.xlsx": estimate_xlsx(p),
+        "architecture.md": architecture_markdown(p),
+        "plan.md": plan_markdown(p),
+        "jira-import.csv": jira_csv(p),
+        "release-notes.md": release_notes_markdown(p),
+        "test-report.csv": test_report_csv(p),
+        "traceability.xlsx": traceability.xlsx(p),
+    }
+    for f in (p.skill_pack.files if p.skill_pack else []):
+        files[f"skills/{f.name}/SKILL.md"] = skill_markdown(f)
+    buf = io.BytesIO()
+    folder = f"{p.id}-handover"
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, content in files.items():
+            zf.writestr(f"{folder}/{name}", content)
+    return buf.getvalue()

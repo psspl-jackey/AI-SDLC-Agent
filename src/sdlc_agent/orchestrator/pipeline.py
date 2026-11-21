@@ -240,7 +240,8 @@ def decide_gate1(deps: Deps, project: Project, role: str, approved: bool, commen
 
 def _reset_from(project: Project, stage: Stage) -> None:
     """A stage re-runs on new inputs, so everything after it must run again."""
-    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD, Stage.QA_RELEASE]
+    order = [Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD, Stage.QA_RELEASE,
+             Stage.HANDOVER]
     for s in order[order.index(stage):] if stage in order else []:
         project.stage_status[s] = StageStatus.PENDING
         if s is Stage.PLATFORM:
@@ -268,6 +269,8 @@ def _reset_from(project: Project, stage: Stage) -> None:
         if s is Stage.QA_RELEASE:
             project.release = None
             project.gate_decisions = [d for d in project.gate_decisions if d.gate != 4]
+        if s is Stage.HANDOVER:
+            project.handover = None
 
 
 def _supersede_pending_change(project: Project, by: str) -> None:
@@ -446,7 +449,8 @@ def submit_change_request(deps: Deps, project_id: str, text: str) -> Project:
     project.stage_status[Stage.REQUIREMENTS] = StageStatus.WAITING_GATE
     project.gate_decisions = [d for d in project.gate_decisions if d.gate not in (1, 2, 3, 4)]
     project.client_decision = None
-    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD, Stage.QA_RELEASE):
+    for s in (Stage.PLATFORM, Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD, Stage.QA_RELEASE,
+              Stage.HANDOVER):
         if project.stage_status[s] is not StageStatus.PENDING:
             project.stage_status[s] = StageStatus.PENDING
     project.log(f"{cr.id} analysed: {len(cr.added)} added, {len(cr.changed)} changed, {len(cr.removed)} removed. "

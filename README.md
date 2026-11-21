@@ -40,7 +40,7 @@ The full system definition is the team doc "AI SDLC Agent: System Definition".
 | Traceability matrix: requirement to input line, platform, estimate, design, ticket, pull request and tests; breaks flagged | Working |
 | Stage 8 QA and release: test cases per requirement, results recorded by testers, code security scan of develop, release checklist, release notes | Working (tests run by people until a sandbox exists) |
 | Gate 4 approval by all three roles, blocked while the release check fails | Working |
-| Stage 9 handover pack | Later |
+| Stage 9 handover: summary, maintenance guide with runbook, all deliverables in one zip, client sign-off blocked by traceability breaks | Working |
 
 ## Setup (macOS)
 

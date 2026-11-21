@@ -187,6 +187,15 @@ class FakeLLM:
                  "requirement_ids": ids + ["REQ-999"], "steps": ["POST /ads without title"], "expected": "400"},
                 {"title": "Smoke check", "kind": "smoke", "requirement_ids": [], "steps": [], "expected": "Loads"},
             ]}
+        elif "support engineer" in system:
+            data = {"runbook": [
+                {"task": "Remove a reported ad", "when": "A user reports an ad",
+                 "steps": ["Open the admin panel", "Find the ad", "Remove it and note the reason"]},
+                "Restart the API",  # string item, no steps: dropped
+                {"task": "remove a reported ad", "steps": ["duplicate"]},
+                {"task": "Restore the database from backup", "when": "Data loss",
+                 "steps": "Stop the API, Restore the latest backup, Start the API"},
+            ]}
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
         else:

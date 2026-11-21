@@ -45,8 +45,11 @@ not new agents.
 - Done (branch `feature/stage8-qa-release`, stacked): Stage 8 (QA agent writes test cases, people record results;
   code security scan of develop; per-platform release checklist; release notes and test report), Gate 4, and
   'done by developers' for tickets outside the agents' scope.
-- Next: pull a model and run the eval to tune prompts; GitHub host and Docker sandbox (Stage 7 and automated
-  test runs in Stage 8); Stage 9 handover pack; rate card for team plan, timeline and cost; proposal doc and
+- Done (branch `feature/stage9-handover`, stacked): Stage 9 handover pack (summary, maintenance guide with a
+  model-written runbook, every deliverable in one zip) and client sign-off, blocked by traceability breaks.
+  All ten stages now run end to end on the fake model.
+- Next: pull a model and run the eval to tune prompts (nothing has run on a real model yet); GitHub host and
+  Docker sandbox (Stage 7 and automated test runs in Stage 8); rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.
 
 ## Decisions already made (do not re-ask)
@@ -97,9 +100,9 @@ not new agents.
 - `src/sdlc_agent/llm/` model interface (Ollama, Anthropic)
 - `src/sdlc_agent/state/` Project model and store
 - `src/sdlc_agent/intake/` detect input, readers, brief, questionnaire
-- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design, skills_setup, planner, developer, qa (run() is pure, apply() merges)
+- `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design, skills_setup, planner, developer, qa, handover (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
-- `src/sdlc_agent/build/git_host.py` GitHost interface, GuardedGit rules, Fake and Local hosts; `orchestrator/build.py` Stage 7 loop, `orchestrator/release.py` Stage 8
+- `src/sdlc_agent/build/git_host.py` GitHost interface, GuardedGit rules, Fake and Local hosts; `orchestrator/build.py` Stage 7 loop, `orchestrator/release.py` Stage 8, `orchestrator/handover.py` Stage 9
 - `src/sdlc_agent/traceability.py` requirement -> ... -> pull request matrix (no model)
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `tech_packs/*.yaml` (stacks Stage 4 may choose), `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`

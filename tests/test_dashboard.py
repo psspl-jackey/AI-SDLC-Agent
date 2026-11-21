@@ -31,7 +31,7 @@ def test_dashboard_screens_and_gate1(settings, monkeypatch):
     at.session_state["project_id"] = project.id
     at.run()
     for screen in ["Overview", "Questions", "Requirements", "Gap register",
-                   "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval", "Design", "Gate 3 approval", "Skills", "Plan", "Build", "QA and release", "Gate 4 approval", "Traceability", "Change requests",
+                   "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval", "Design", "Gate 3 approval", "Skills", "Plan", "Build", "QA and release", "Gate 4 approval", "Handover", "Traceability", "Change requests",
                    "Deliverables", "Trace and cost"]:
         at.sidebar.radio[0].set_value(screen).run()
         assert not at.exception, screen

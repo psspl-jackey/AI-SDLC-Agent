@@ -1,4 +1,4 @@
-"""Dashboard v1 for the AI SDLC Agent (intake through Stage 8 QA and release).
+"""Dashboard v1 for the AI SDLC Agent: all ten stages, from intake to handover.
 
 Run from the repo root:  streamlit run dashboard/app.py
 """
@@ -12,7 +12,7 @@ import streamlit as st
 from sdlc_agent import exports, traceability
 from sdlc_agent.gaps.register import coverage_check, gate_status
 from sdlc_agent.intake.questionnaire import build_questionnaire
-from sdlc_agent.agents import estimator, planner, qa
+from sdlc_agent.agents import estimator, handover, planner, qa
 from sdlc_agent.agents.platform_decision import platform_check
 from sdlc_agent.orchestrator import (
     Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
@@ -21,6 +21,7 @@ from sdlc_agent.orchestrator import (
 from sdlc_agent.orchestrator.build import (
     build_next, failed_tickets, in_scope, latest, local_host, mark_done_by_developers, mark_merged,
 )
+from sdlc_agent.orchestrator.handover import record_signoff, run_stage9
 from sdlc_agent.orchestrator.release import record_test_result, run_stage8, set_checklist_item
 from sdlc_agent.orchestrator.pipeline import GATE_STAGE
 from sdlc_agent.questions.queue import answer_question, open_questions
@@ -73,7 +74,7 @@ with st.sidebar:
         page = st.radio("Screen", ["Overview", "Questions", "Requirements", "Gap register",
                                    "Gate 1 approval", "Platforms", "Estimate", "Gate 2 approval",
                                    "Design", "Gate 3 approval", "Skills", "Plan", "Build", "QA and release", "Gate 4 approval",
-                                   "Traceability", "Change requests",
+                                   "Handover", "Traceability", "Change requests",
                                    "Deliverables",
                                    "Trace and cost"])
 
@@ -563,6 +564,66 @@ def release_screen(project) -> None:
             st.rerun()
 
 
+def handover_screen(project) -> None:
+    st.header("Stage 9: handover")
+    st.write("The handover pack holds the handover summary, a maintenance guide with a project runbook, and every "
+             "deliverable. The client signs off once the traceability matrix shows no break.")
+    ready = project.stage_status[Stage.QA_RELEASE] is StageStatus.APPROVED
+    if not ready:
+        st.info("Gate 4 must approve the release first.")
+    label = "Prepare handover pack" if project.handover is None else "Prepare handover pack again"
+    if st.button(label, type="primary", disabled=not ready):
+        with st.spinner("Writing the runbook and assembling the pack"):
+            try:
+                run_stage9(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        st.rerun()
+    if project.handover is None:
+        return
+    st.download_button("Handover pack (.zip)", exports.handover_zip(project), file_name=f"{project.id}-handover.zip")
+    report = handover.handover_check(project)
+    if report.passed:
+        st.success("Traceability is complete: every requirement is traced and every input line is accounted for.")
+    else:
+        st.error("Sign-off is blocked until these are fixed:")
+        for f in report.failures:
+            st.write(f"- {f}")
+    st.subheader("Open items the client signs off on")
+    for label_, items in handover.open_items(project).items():
+        st.write(f"**{label_}:** {len(items)}")
+        for x in items:
+            st.write(f"- {x}")
+    with st.expander("Handover summary"):
+        st.markdown(handover.handover_markdown(project))
+    with st.expander("Maintenance guide"):
+        st.markdown(handover.maintenance_markdown(project))
+    st.subheader("Client sign-off")
+    so = project.handover.signoff
+    if so:
+        st.write(f"**{'Accepted' if so.accepted else 'Not accepted'}** by {so.signed_by} on {so.signed_at:%Y-%m-%d}. "
+                 f"{so.comment}")
+    if project.stage_status[Stage.HANDOVER] in (StageStatus.WAITING_GATE, StageStatus.REJECTED):
+        who = st.text_input("Signed by (client name and role)")
+        note = st.text_area("Client comment", key="signoff_comment")
+        c1, c2 = st.columns(2)
+        if c1.button("Record acceptance", type="primary", disabled=not report.passed):
+            try:
+                record_signoff(deps, project, True, who, note)
+            except (RuntimeError, ValueError) as exc:
+                st.error(str(exc))
+                return
+            st.rerun()
+        if c2.button("Record non-acceptance"):
+            try:
+                record_signoff(deps, project, False, who, note)
+            except (RuntimeError, ValueError) as exc:
+                st.error(str(exc))
+                return
+            st.rerun()
+
+
 def change_requests_screen(project) -> None:
     st.header("Change requests")
     st.write("A change re-enters at Stage 1: requirements are updated, Gate 1 opens again, and after approval "
@@ -695,6 +756,8 @@ def deliverables_screen(project) -> None:
                        file_name=f"{project.id}-release-notes.md", disabled=project.release is None, key="dl_notes")
     st.download_button("Test report (.csv)", exports.test_report_csv(project),
                        file_name=f"{project.id}-test-report.csv", disabled=project.release is None, key="dl_tests")
+    st.download_button("Handover pack (.zip)", exports.handover_zip(project), file_name=f"{project.id}-handover.zip",
+                       disabled=project.handover is None, key="dl_handover")
     st.download_button("Sprint plan (.md)", exports.plan_markdown(project), file_name=f"{project.id}-plan.md",
                        disabled=project.plan is None, key="dl_plan")
 
@@ -724,7 +787,8 @@ else:
         "Estimate": estimate_screen, "Gate 2 approval": lambda p: gate_screen(p, 2),
         "Design": design_screen, "Gate 3 approval": lambda p: gate_screen(p, 3), "Skills": skills_screen,
         "Plan": plan_screen, "Build": build_screen, "QA and release": release_screen,
-        "Gate 4 approval": lambda p: gate_screen(p, 4), "Traceability": traceability_screen,
+        "Gate 4 approval": lambda p: gate_screen(p, 4), "Handover": handover_screen,
+        "Traceability": traceability_screen,
         "Change requests": change_requests_screen,
         "Deliverables": deliverables_screen,
         "Trace and cost": trace_screen,
