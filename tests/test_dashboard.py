@@ -22,7 +22,7 @@ def test_dashboard_screens_and_gate1(settings, monkeypatch):
                         lambda self, system, prompt, json_mode=False: fake.complete(system, prompt, json_mode=json_mode))
     deps = Deps(settings=settings, llm=FakeLLM(), read_url=fake_read_url, check_link=lambda u: True)
     project = deps.store.create("Dashboard test")
-    start_intake(deps, project, [RawInput(kind="text", value="Build an app like OLX for Gujarat")])
+    start_intake(deps, project, [RawInput(kind="text", value="Build an Android and iOS app like OLX for Gujarat")])
     finish_intake(deps, project, {"competitors": "https://a.example, https://b.example"})
     run_stage1(deps, project.id)
 

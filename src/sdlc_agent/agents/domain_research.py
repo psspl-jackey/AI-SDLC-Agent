@@ -19,7 +19,7 @@ from ..llm.base import LLMClient
 from ..llm.json_call import Dicts, complete_json
 from ..state.models import Chunk, Project
 
-CHECKLIST_SHAPE = {"items": Dicts({"id": "str", "status": "str", "reason": "str"})}
+CHECKLIST_SHAPE = {"items": Dicts({"id": "str", "status": "str", "covered_by": "str", "reason": "str"})}
 COMPETITOR_SHAPE = {"name": "str", "features": "strs", "complaints": "strs"}
 GAP_SHAPE = {"missing": Dicts({"feature": "str", "competitor_ids": "strs"})}
 
@@ -53,8 +53,10 @@ def _region_matches(pack_region: str, brief_region: str) -> bool:
 
 
 CHECKLIST_SYSTEM = """You compare a project's planned features with a standard feature checklist for its domain.
-For each checklist item decide: "covered" (the brief clearly includes it), "missing" (not in the brief
-and relevant to this product), or "not_relevant" (does not fit this product). Judge by meaning, not wording."""
+An item is "covered" ONLY when one planned feature clearly states it; cite that feature's id (F1, F2...).
+A feature that is merely implied, likely, or "part of the nature of the app" is NOT covered: mark it
+"missing". Mark "not_relevant" only when the item cannot apply to this kind of product at all, and say why.
+When unsure, choose "missing"; a human reviews every missing item."""
 
 COMPETITOR_SYSTEM = """You read a public web page of an app or website and list what it offers.
 Extract product features a user can see or use (short noun phrases), and any user complaints
@@ -95,17 +97,34 @@ def run(
         pack_name, pack = matched
         result["pack"] = pack_name
         items = "\n".join(f"{f['id']}: {f['name']}" for f in pack.get("features", []))
+        planned = {f"F{i}": text for i, text in enumerate(_brief_features(project), start=1)}
         prompt = (
-            f"Project goal: {brief.goal}\nPlanned features:\n- " + "\n- ".join(_brief_features(project) or ["(none)"])
+            f"Project goal: {brief.goal}\nPlanned features:\n"
+            + ("\n".join(f"{k}: {v}" for k, v in planned.items()) or "(none)")
             + f"\n\nChecklist:\n{items}\n\n"
-            'Return JSON: {"items": [{"id": str, "status": "covered" | "missing" | "not_relevant", "reason": str}]}'
+            'Return JSON: {"items": [{"id": str, "status": "covered" | "missing" | "not_relevant", '
+            '"covered_by": str, "reason": str}]}  (covered_by: the planned feature id, or "" if not covered)'
         )
         data = complete_json(llm, CHECKLIST_SYSTEM, prompt, CHECKLIST_SHAPE)
-        tiers = {f["id"]: f for f in pack.get("features", [])}
-        for item in data.get("items", []) or []:
-            feat = tiers.get(item.get("id"))
-            if feat and item.get("status") == "missing":
-                result["checklist"].append({"id": feat["id"], "name": feat["name"], "tier": feat.get("tier", "common")})
+        answers = {item.get("id"): item for item in data.get("items", [])}
+        for feat in pack.get("features", []):
+            item = answers.get(feat["id"], {})
+            status, cited = item.get("status", ""), item.get("covered_by", "").strip()
+            table_stakes = feat.get("tier", "common") == "table_stakes"
+            # Code decides: covered needs a real planned feature cited; table stakes are never "not relevant".
+            if status == "covered" and cited in planned:
+                continue
+            if status == "not_relevant" and not table_stakes:
+                continue
+            if status == "covered":
+                result["notes"].append(f"Checklist: {feat['id']} claimed covered without citing a planned feature; "
+                                       "treated as missing")
+            elif status == "not_relevant":
+                result["notes"].append(f"Checklist: {feat['id']} is table stakes; 'not relevant' needs a human "
+                                       f"decision at Gate 1 ({item.get('reason', '')})")
+            elif feat["id"] not in answers:
+                result["notes"].append(f"Checklist: no answer for {feat['id']}; treated as missing")
+            result["checklist"].append({"id": feat["id"], "name": feat["name"], "tier": feat.get("tier", "common")})
         for c in pack.get("compliance", []) or []:
             if _region_matches(c.get("region", ""), brief.region if brief else ""):
                 result["compliance"].append(c["note"])

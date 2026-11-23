@@ -48,7 +48,11 @@ not new agents.
 - Done (branch `feature/stage9-handover`, stacked): Stage 9 handover pack (summary, maintenance guide with a
   model-written runbook, every deliverable in one zip) and client sign-off, blocked by traceability breaks.
   All ten stages now run end to end on the fake model.
-- Next: pull a model and run the eval to tune prompts (nothing has run on a real model yet); GitHub host and
+- In progress (branch `feature/prompt-tuning-round1`): fixes from the first qwen2.5:7b runs (checklist needs a
+  cited feature, platforms only if the client said them, analyst follow-up for unmapped lines, reviewer merge
+  guard, thin briefs filled from the domain pack, dummy-payment wording) and Stage 7 fixes (only coding tickets
+  go to the developer agent; one follow-up call for missing tests; local pull request diff on the dashboard).
+- Next: re-run the eval and keep tuning prompts; GitHub host and
   Docker sandbox (Stage 7 and automated test runs in Stage 8); rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.
 
@@ -74,6 +78,7 @@ not new agents.
 | Tech packs | v1 written by Claude Code (Flutter, React Native, Kotlin, Swift, React, Next.js, NestJS, FastAPI, Spring); tech lead to review and own |
 | Sprint plan | `JIRA_PROJECT_KEY=SDLC` placeholder until the real key exists; 2-week sprints, 240 h capacity per sprint (placeholders, tech lead to set); tickets reach Jira by CSV import for now (API needs Jira URL and token) |
 | Stage 7 build | Agents build tickets up to `BUILD_MAX_SPRINT` (default 1). Every agent write goes through `GuardedGit` (feature branches only, PRs into develop, Jira/ticket key in commits, requirement ids in PR body, no secrets or paths outside the repo). Local git host for the demo; GitHub host, coding agent choice (Claude Code headless vs local model) and Docker sandbox still to decide |
+| Working without Jira | Everything runs locally: tickets keep local ids (T-001), code goes to the local git repo under `data/build/<project>/repo`, pull requests are recorded next to it and reviewed on the Build screen. Jira CSV export is optional |
 | Estimate risk buffer | 15% default (`RISK_BUFFER_PCT` in .env), reviewed at Gate 2; placeholder until there is effort history |
 
 ## Rules that must hold in code

@@ -30,6 +30,7 @@ gaps:
     type: sow
     text: Platforms not stated (Android, iOS, web)
     match: [[platform, android, ios]]
+    exclude: [version, minimum, devices and os]
   - id: P-02
     type: sow
     text: Login and registration method not stated

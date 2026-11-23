@@ -101,6 +101,25 @@ def _render_chunks(chunks: list[Chunk], max_chars: int = 30000) -> str:
     return "\n".join(out)
 
 
+_PLATFORM_WORDS = {
+    "android": ("android",), "ios": ("ios", "iphone", "ipad", "apple"),
+    "web": ("web", "website", "browser", "pwa"), "admin panel": ("admin",),
+    "mobile": ("mobile", "app store", "play store", "smartphone"),
+}
+
+
+def _stated_platforms(proposed: list, chunks: list[Chunk]) -> list[str]:
+    """Keep a platform only if the client's own text mentions it; small models tend to invent one."""
+    text = " ".join(c.text for c in _client_chunks(chunks)).lower()
+    kept = []
+    for p in proposed or []:
+        name = str(p).lower().strip()
+        words = next((w for key, w in _PLATFORM_WORDS.items() if key in name or name in key), (name,))
+        if name and any(re.search(rf"\b{re.escape(w)}", text) for w in words):
+            kept.append(name)
+    return kept
+
+
 def build_brief(llm: LLMClient, chunks: list[Chunk], completeness: Completeness) -> ProjectBrief:
     prompt = f"Client input:\n\n{_render_chunks(chunks)}\n\n{BRIEF_SCHEMA}"
     data = complete_json(llm, BRIEF_SYSTEM, prompt, BRIEF_SHAPE)
@@ -119,7 +138,7 @@ def build_brief(llm: LLMClient, chunks: list[Chunk], completeness: Completeness)
         region=str(data.get("region", "")),
         target_users=[str(x) for x in data.get("target_users", []) or []],
         intent=intent if intent in ("new", "rebuild", "like_reference") else "unknown",
-        platforms=[str(x).lower() for x in data.get("platforms", []) or []],
+        platforms=_stated_platforms(data.get("platforms", []), chunks),
         features=items("features"),
         nfrs=items("nfrs"),
         constraints=items("constraints"),
@@ -152,3 +171,30 @@ def apply_intake_answers(brief: ProjectBrief, answers: dict[str, str]) -> Projec
     if answers.get("competitors"):
         b.references.extend(x.strip() for x in answers["competitors"].split(",") if x.strip())
     return b
+
+
+def fill_thin_brief(brief: ProjectBrief) -> int:
+    """Thin input (one line): fill the brief from the domain pack's table-stakes features, tagged inferred.
+    Each one then enters the gap register as assumed and is confirmed or dropped at Gate 1."""
+    from ..domain_packs import match_pack
+
+    if brief is None or brief.completeness is not Completeness.THIN:
+        return 0
+    matched = match_pack(brief.domain)
+    if not matched:
+        return 0
+    have = {_norm_words(f.text) for f in brief.features}
+    added = 0
+    for feat in matched[1].get("features", []):
+        if feat.get("tier") != "table_stakes":
+            continue
+        words = _norm_words(feat["name"])
+        if any(len(words & h) / max(1, len(words)) >= 0.6 for h in have):
+            continue
+        brief.features.append(BriefItem(text=f"{feat['name']} ({feat['id']})", source=SourceRef(kind="inferred")))
+        added += 1
+    return added
+
+
+def _norm_words(text: str) -> frozenset[str]:
+    return frozenset(w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2)

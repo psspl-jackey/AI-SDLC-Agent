@@ -30,7 +30,7 @@ def approve(deps, project, gate):
 
 def planned(deps):
     project = deps.store.create("OLX-style app")
-    start_intake(deps, project, [RawInput(kind="text", value="Build an app like OLX for Gujarat")])
+    start_intake(deps, project, [RawInput(kind="text", value="Build an Android and iOS app like OLX for Gujarat")])
     finish_intake(deps, project, {"competitors": "https://ref-one.example, https://ref-two.example"})
     project = approve(deps, run_stage1(deps, project.id), 1)
     run_stage2(deps, project.id)
@@ -103,18 +103,44 @@ def test_build_order_merge_and_handover(deps):
         built.append(rec)
         if rec.status == "pr_open":
             project = mark_merged(deps, project, rec.ticket_id, git)
-    qa = next(b for b in built if "Test plan" in next(x.summary for x in scope if x.id == b.ticket_id))
-    assert qa.status == "failed" and "no unit tests" in qa.error  # refused, nothing committed
+    assert all(b.status == "pr_open" or b.status == "merged" for b in built)
     assert all("REQ-001" in pr["body"] and pr["base"] == "develop" for pr in git.pull_requests[1:])
-    assert len(git.pull_requests) == len(scope) - 1  # every ticket but the refused QA one
-    assert project.stage_status[Stage.BUILD] is StageStatus.RUNNING  # QA still open, so no handover yet
+    assert len(git.pull_requests) == len(scope)  # every agent ticket built
+    qa = next(t for t in project.plan.tasks() if "Test plan" in t.summary)
+    assert qa not in scope  # QA planning is the team's ticket, not the developer agent's
+    assert project.stage_status[Stage.BUILD] is StageStatus.DONE
+
+
+def test_non_coding_tickets_go_to_the_team():
+    from sdlc_agent.orchestrator.build import is_agent_ticket
+    from sdlc_agent.state.models import Ticket
+
+    def t(summary, role):
+        return Ticket(id="T-1", type="task", summary=summary, role=role)
+
+    # The ticket qwen2.5:7b's plan put in sprint 1 and the developer agent wrongly coded.
+    assert not is_agent_ticket(t("[common] Design user interface for web platform", "UI/UX Designer"))
+    assert not is_agent_ticket(t("[common] Test plan and regression", "QA"))
+    assert not is_agent_ticket(t("[common] Sprint planning", "Project Manager"))
+    assert is_agent_ticket(t("[web] Login screen", "Frontend Developer"))
+    assert is_agent_ticket(t("[backend] Ads API", "Backend Engineer"))
+    assert is_agent_ticket(t("[common] Project setup and CI", "tech lead"))
+    assert is_agent_ticket(t("[web] Build design system components", "UI Developer"))
+    assert is_agent_ticket(t("[web] Design and implement ad category selection", "Frontend Developer"))
+    assert not is_agent_ticket(t("[web] Design the checkout wireframes", "Frontend Developer"))
+
+
+def test_docs_only_change_needs_no_tests_but_code_does():
+    from sdlc_agent.agents.developer import needs_tests
+
+    assert not needs_tests({"docs/test-plan.md": "# plan", "app/pubspec.yaml": "name: app"})
+    assert needs_tests({"web/src/pages/index.tsx": "export default () => null"})
+    assert not needs_tests({"web/src/pages/index.tsx": "x", "web/src/__tests__/index.test.tsx": "y"})
 
 
 def test_handover_when_every_agent_ticket_is_merged(deps):
     project = planned(deps)
     git = FakeGitHost()
-    project.plan.tickets = [t for t in project.plan.tickets if "Test plan" not in t.summary]
-    deps.store.save(project)
     while next_ready(project, 1) is not None:
         project, rec = build_next(deps, project.id, git)
         project = mark_merged(deps, project, rec.ticket_id, git)
@@ -127,21 +153,34 @@ def test_build_needs_a_plan(deps):
         build_next(deps, deps.store.create("x").id, FakeGitHost())
 
 
-def test_failed_ticket_is_not_repicked_but_can_be_retried(deps):
+def test_code_without_tests_is_asked_again_then_refused_and_not_repicked(deps):
     project = planned(deps)
     git = FakeGitHost()
-    qa = next(t for t in in_scope(project, 1) if "Test plan" in t.summary)
-    project.plan.tickets = [t for t in project.plan.tickets if t.type == "epic" or t.id == qa.id]
-    qa.depends_on = []
+    ticket = next(t for t in in_scope(project, 1) if "Post-ad flow" in t.summary)
+    ticket.summary, ticket.depends_on = "[android] No tests feature", []
+    project.plan.tickets = [t for t in project.plan.tickets if t.type == "epic" or t.id == ticket.id]
     deps.store.save(project)
+    calls = len(deps.llm.calls)
     _, first = build_next(deps, project.id, git)
-    assert first.status == "failed"
+    assert first.status == "failed" and "even after asking again" in first.error
+    assert len(deps.llm.calls) - calls == 2  # the ticket, then one follow-up asking only for tests
     project, again = build_next(deps, project.id, git)
     assert again is None  # not picked again automatically
-    _, second = build_next(deps, project.id, git, retry_ticket_id=qa.id)
+    _, second = build_next(deps, project.id, git, retry_ticket_id=ticket.id)
     assert second.status == "failed" and second.branch.endswith("-r2")
     with pytest.raises(RuntimeError, match="not a failed ticket"):
         build_next(deps, project.id, git, retry_ticket_id="T-999")
+
+
+def test_follow_up_call_adds_missing_tests(deps):
+    project = planned(deps)
+    git = FakeGitHost()
+    ticket = next(t for t in in_scope(project, 1) if "Post-ad flow" in t.summary)
+    ticket.summary, ticket.depends_on = "[android] Tests later feature", []
+    project.plan.tickets = [t for t in project.plan.tickets if t.type == "epic" or t.id == ticket.id]
+    deps.store.save(project)
+    _, rec = build_next(deps, project.id, git)
+    assert rec.status == "pr_open" and any("_test" in f for f in rec.files)
 
 
 def test_local_git_host_creates_real_branches_and_merges(tmp_path, deps):
@@ -155,6 +194,8 @@ def test_local_git_host_creates_real_branches_and_merges(tmp_path, deps):
     prs = json.loads((tmp_path / "build" / "pull_requests.json").read_text())
     assert prs[0]["head"] == rec.branch and prs[0]["base"] == "develop"
     assert not (repo / "app" / "pubspec.yaml").exists()  # develop is untouched until the merge
+    diff = host.diff(rec.branch)
+    assert "app/pubspec.yaml" in diff and "+name: app" in diff  # what the reviewer sees before merging
     mark_merged(deps, project, rec.ticket_id, host)
     assert (repo / "app" / "pubspec.yaml").exists()
 

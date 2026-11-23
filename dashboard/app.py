@@ -421,8 +421,9 @@ def build_screen(project) -> None:
         st.info("Run the internal plan (Stage 6) first.")
         return
     host = local_host(deps, project.id)
-    st.caption(f"Git host: local repository at {host.repo} (nothing is pushed). "
-               "A GitHub host plugs in once a repository and a scoped token are set up.")
+    st.caption(f"Everything is local: tickets use local ids (T-001...), code goes to the git repository at "
+               f"{host.repo}, and pull requests are recorded next to it. Nothing is pushed and Jira is not needed. "
+               "Review each change below before marking it merged.")
     if st.button("Build next ticket", type="primary"):
         with st.spinner("The developer agent is working on the next ticket"):
             try:
@@ -451,6 +452,13 @@ def build_screen(project) -> None:
             if c2.button("Mark merged", key=f"merge_{t.id}"):
                 mark_merged(deps, project, t.id, host)
                 st.rerun()
+            with st.expander(f"Review the changes in {t.id} before merging"):
+                if rec.summary:
+                    st.write(rec.summary)
+                try:
+                    st.code(host.diff(rec.branch) or "(no changes)", language="diff")
+                except Exception as exc:
+                    st.error(f"Could not read the branch: {exc}")
     failed = failed_tickets(project, max_sprint)
     if failed:
         st.subheader("Failed")
@@ -468,8 +476,9 @@ def build_screen(project) -> None:
     human = [t for t in project.plan.tasks() if t not in in_scope(project, max_sprint)
              and not ((r := latest(project, t.id)) and r.status == "merged")]
     if human:
-        with st.expander(f"Tickets for the development team ({len(human)} open)"):
-            st.caption("Tickets after the agents' scope. Mark each one done when the team has merged it.")
+        with st.expander(f"Tickets for the team ({len(human)} open)"):
+            st.caption("Design, QA planning and project management tickets, plus coding tickets after the agents' "
+                       "sprint. Mark each one done when the team has finished it.")
             for t in human:
                 c1, c2, c3 = st.columns([3, 2, 1])
                 c1.write(f"**{t.id}** [sprint {t.sprint}] {t.summary}")

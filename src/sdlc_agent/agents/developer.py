@@ -18,8 +18,9 @@ from ..state.models import Project, Ticket
 NAME = "developer"
 
 SYSTEM = """You are a developer agent at a software company. You implement exactly one ticket, following
-the project's skills (architecture, conventions, security, testing). Write complete, compilable files,
-including unit tests for what you build. Change only what the ticket needs. Never include secrets, API
+the project's skills (architecture, conventions, security, testing). Write complete, compilable files.
+Every change that adds code MUST include unit test files in the stack's test folder (for example
+test/..._test.dart, src/__tests__/....test.tsx, tests/test_....py). Change only what the ticket needs. Never include secrets, API
 keys or passwords; read configuration from the environment. Payment uses the dummy payment gateway with
 static responses; do not integrate real payment providers or other third-party services."""
 SHAPE = {"files": Dicts({"path": "str", "content": "str"}), "summary": "str", "notes": "strs"}
@@ -30,6 +31,27 @@ TEST_PATH = re.compile(r"(^|/)(tests?|__tests__|spec|test)(/|$)|(_test|\.test|\.
 
 def is_test_file(path: str) -> bool:
     return bool(TEST_PATH.search(path))
+
+
+CODE_EXT = re.compile(r"\.(py|js|jsx|ts|tsx|dart|kt|kts|java|swift|go|rb|php|cs|m|mm|vue|svelte)$", re.IGNORECASE)
+
+
+def needs_tests(files: dict[str, str]) -> bool:
+    """Code needs unit tests; a change with only docs or configuration does not."""
+    return any(CODE_EXT.search(p) and not is_test_file(p) for p in files) and not any(is_test_file(p) for p in files)
+
+
+TESTS_SYSTEM = """You are a developer agent writing unit tests for code another agent just wrote. Use the test
+framework of the stack skill. Put tests where that stack expects them (for example test/..._test.dart,
+src/__tests__/....test.tsx, tests/test_....py). Test real behaviour, not just that a file imports."""
+
+
+def add_tests(llm: LLMClient, project: Project, ticket: Ticket, files: dict[str, str]) -> dict[str, str]:
+    code = "\n\n".join(f"### {p}\n{c[:4000]}" for p, c in files.items() if CODE_EXT.search(p))[:16000]
+    reply = complete_json(llm, TESTS_SYSTEM, f"{brief(project, ticket)}\n## Code to test\n\n{code}\n\n"
+                          'Return JSON: {"files": [{"path": str, "content": str}]} with only the new test files.', SHAPE)
+    return {f["path"].strip(): f["content"] for f in reply.get("files", [])
+            if f.get("path", "").strip() and is_test_file(f["path"].strip())}
 
 
 def brief(project: Project, ticket: Ticket) -> str:

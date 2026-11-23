@@ -18,7 +18,7 @@ def deps(settings, fake_llm):
 
 def approved_project(deps):
     project = deps.store.create("OLX-style app")
-    start_intake(deps, project, [RawInput(kind="text", value="Build an app like OLX for Gujarat")])
+    start_intake(deps, project, [RawInput(kind="text", value="Build an Android and iOS app like OLX for Gujarat")])
     finish_intake(deps, project, {"competitors": "https://ref-one.example, https://ref-two.example"})
     project = run_stage1(deps, project.id)
     for role in ("tech_lead", "delivery_head", "sales"):
@@ -29,7 +29,7 @@ def approved_project(deps):
 
 def test_stage2_needs_gate1(deps):
     project = deps.store.create("x")
-    start_intake(deps, project, [RawInput(kind="text", value="Build an app like OLX for Gujarat")])
+    start_intake(deps, project, [RawInput(kind="text", value="Build an Android and iOS app like OLX for Gujarat")])
     finish_intake(deps, project, {})
     run_stage1(deps, project.id)
     with pytest.raises(RuntimeError, match="Gate 1"):

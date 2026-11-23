@@ -50,7 +50,9 @@ class FakeLLM:
             }
         elif "standard feature checklist" in system:
             data = {"items": [
-                {"id": "CL-01", "status": "covered", "reason": ""},
+                {"id": "CL-01", "status": "covered", "covered_by": "F1", "reason": ""},
+                {"id": "CL-02", "status": "covered", "reason": "implied by buying and selling"},  # no citation
+                {"id": "CL-17", "status": "not_relevant", "reason": "single language"},  # common: allowed
                 {"id": "CL-05", "status": "missing", "reason": "no chat"},
                 {"id": "CL-13", "status": "missing", "reason": "no verification"},
             ]}
@@ -167,7 +169,13 @@ class FakeLLM:
             data = {"dependencies": deps}
         elif "developer agent" in system:
             title = re.search(r"^# Ticket \S+: (.+)$", prompt, re.MULTILINE).group(1)
-            if "Test plan" in title:  # no unit tests: the build must refuse it
+            writing_tests = "writing unit tests" in system
+            if "No tests" in title:  # code without tests, even when asked again
+                files = [{"path": "app/lib/no_tests.dart", "content": "// code\n"}]
+            elif "Tests later" in title:  # tests only on the follow-up call
+                files = ([{"path": "app/test/later_test.dart", "content": "void main() {}\n"}] if writing_tests
+                         else [{"path": "app/lib/later.dart", "content": "// code\n"}])
+            elif "Test plan" in title:
                 files = [{"path": "docs/test-plan.md", "content": "# Test plan\n"}]
             elif "Project setup" in title:
                 files = [{"path": "app/pubspec.yaml", "content": "name: app\n"},

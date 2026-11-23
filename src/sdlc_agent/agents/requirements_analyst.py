@@ -5,6 +5,8 @@ apply() merges the result into the project.
 """
 from __future__ import annotations
 
+import re
+
 from pathlib import Path
 
 from ..gaps.register import add_gap
@@ -28,13 +30,18 @@ SKILL = Path(__file__).resolve().parents[3] / "skills" / "nfr_checklist.md"
 
 SYSTEM = """You are a senior business analyst at a software delivery company.
 From the project brief and the numbered input lines, you:
-1. Write clear, testable requirements. Each one cites the input line ids it comes from.
-2. Mark input lines that are not requirements (greetings, background, company info).
-3. Find gaps: missing, vague or conflicting points in the input (source "sow"), and missing
-   non-functional requirements from the checklist that would change cost or architecture (source "nfr").
-4. For every gap, write one question for the client, say whether it blocks work, and give the
-   most reasonable assumed answer so work can continue.
-5. Note feasibility concerns (technical or timeline).
+1. Write clear, testable requirements. Each one cites the input line ids it comes from. Also write a
+   requirement for each feature in the brief that no input line covers (cite no line ids for those).
+2. Account for EVERY input line: each line id appears in some requirement's sow_line_ids or in
+   not_requirement_line_ids (greetings, background, company info).
+3. Read each input line on its own and raise a "sow" gap when it is vague or not measurable ("fast",
+   "easy", "modern"), has no date or number where one is needed ("before Diwali" with no year),
+   conflicts with another line, or leaves out who, which platform, or how (for example how users log in).
+4. Then raise "nfr" gaps for checklist items that are missing AND would change cost or architecture for
+   THIS project. Be specific to the project; do not copy the checklist wording.
+5. For every gap, write one question for the client, say whether it blocks work, and give the most
+   reasonable assumed answer so work can continue.
+6. Note feasibility concerns (technical or timeline).
 Real payment and third-party integrations are out of scope for now: if the input needs payment,
 write the requirement against a dummy payment gateway with static responses.
 Never invent client facts. Keep every item to one or two sentences."""
@@ -59,7 +66,34 @@ def run(llm: LLMClient, project: Project) -> dict:
         f"Project brief (JSON):\n{brief}\n\nInput lines:\n{lines}\n\n"
         f"NFR checklist:\n{checklist}\n\n{SCHEMA}"
     )
-    return complete_json(llm, SYSTEM, prompt, SHAPE)
+    result = complete_json(llm, SYSTEM, prompt, SHAPE)
+
+    # Small models often skip lines. Ask again for just the lines nothing accounts for.
+    mapped = {lid for r in result.get("requirements", []) for lid in r.get("sow_line_ids", [])}
+    mapped |= set(result.get("not_requirement_line_ids", []))
+    missing = [line for line in project.sow_lines if line.id not in mapped]
+    if missing:
+        listing = "\n".join(f"{line.id}: {line.text}" for line in missing)
+        extra = complete_json(llm, SYSTEM, (
+            f"Project brief (JSON):\n{brief}\n\nThese input lines are not yet accounted for:\n{listing}\n\n"
+            "For each line, write the requirement it states (citing the line id), or list it in "
+            f"not_requirement_line_ids. Raise a sow gap if the line is vague.\n\n{SCHEMA}"
+        ), SHAPE)
+        for key in ("requirements", "gaps", "feasibility"):
+            result[key] = result.get(key, []) + extra.get(key, [])
+        result["not_requirement_line_ids"] = result.get("not_requirement_line_ids", []) + extra.get(
+            "not_requirement_line_ids", [])
+    return result
+
+
+_PAYMENT = re.compile(r"\bpay(s|ing|ment|ments)?\b|\bcheckout\b", re.IGNORECASE)
+_DUMMY = re.compile(r"\b(dummy|mock|stub|simulated|static)\b", re.IGNORECASE)
+DUMMY_NOTE = " Payment uses the dummy payment gateway with static responses; real payment is out of scope for now."
+
+
+def with_payment_rule(text: str) -> str:
+    """Rule from the team decisions: payment is built against a dummy gateway. Enforced in code."""
+    return text + DUMMY_NOTE if _PAYMENT.search(text) and not _DUMMY.search(text) else text
 
 
 def apply(project: Project, result: dict) -> None:
@@ -73,7 +107,7 @@ def apply(project: Project, result: dict) -> None:
         source = line_by_id[line_ids[0]].source if line_ids else SourceRef(kind="inferred")
         req = Requirement(
             id=next_id("REQ", (r.id for r in project.requirements)),
-            text=text,
+            text=with_payment_rule(text),
             kind="nfr" if item.get("kind") == "nfr" else "functional",
             source=source,
             sow_line_ids=line_ids,

@@ -185,3 +185,7 @@ class LocalGitHost:
             except subprocess.CalledProcessError:
                 continue
         return out
+
+    def diff(self, branch: str, base: str = "develop") -> str:
+        """What a pull request changes, for review on the dashboard before merging."""
+        return self._git("diff", f"{base}...{branch}")

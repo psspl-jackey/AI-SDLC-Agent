@@ -5,8 +5,11 @@
 - Order: sprint, then ticket id; a ticket is ready when every ticket it depends on is merged.
 - Review: every pull request waits for a human. mark_merged() records the merge (and, for the local
   host, merges the branch into develop), which unblocks the tickets that depend on it.
-- A ticket whose change breaks a rule (no unit tests, secret found, path outside the repo...) is
-  recorded as failed with the reason; nothing is committed for it.
+- Only coding tickets go to the developer agent (is_agent_ticket); design, QA planning and project
+  management tickets are the team's, marked done on the Build screen.
+- Code without unit tests gets one follow-up call for the tests. A change that still breaks a rule
+  (no unit tests, secret found, path outside the repo...) is recorded as failed with the reason;
+  nothing is committed for it.
 """
 from __future__ import annotations
 
@@ -25,9 +28,28 @@ def local_host(deps: Deps, project_id: str) -> LocalGitHost:
     return LocalGitHost(deps.settings.data_dir / "build" / project_id)
 
 
+NON_CODING_ROLES = re.compile(
+    r"design|ux|ui/|project manag|product manag|\bpm\b|scrum|\bqa\b|test(er|ing)? (lead|analyst|engineer)?|"
+    r"business analyst|\bba\b|delivery|account|content|copywrit|marketing", re.IGNORECASE)
+NON_CODING_TITLES = re.compile(r"^\[[^\]]*\]\s*(design|wireframe|mock-?up|test plan|plan |user research|"
+                               r"project management|documentation of requirements)", re.IGNORECASE)
+
+
+def is_agent_ticket(t: Ticket) -> bool:
+    """The developer agent writes code. Design, QA planning, project management and analysis tickets
+    go to the team, who mark them done on the Build screen."""
+    builds_code = re.search(r"\b(implement|build|develop|code|integrate|set ?up)\w*", t.summary, re.IGNORECASE)
+    if NON_CODING_TITLES.search(t.summary) and not builds_code:
+        return False
+    coding_role = re.search(r"develop|engineer|devops|tech lead|programmer", t.role or "", re.IGNORECASE)
+    return bool(coding_role) or not (t.role and NON_CODING_ROLES.search(t.role))
+
+
 def in_scope(project: Project, max_sprint: int) -> list[Ticket]:
+    """Tickets the agents build: coding tickets up to max_sprint."""
     tasks = project.plan.tasks() if project.plan else []
-    return sorted((t for t in tasks if t.sprint and t.sprint <= max_sprint), key=lambda t: (t.sprint, t.id))
+    return sorted((t for t in tasks if t.sprint and t.sprint <= max_sprint and is_agent_ticket(t)),
+                  key=lambda t: (t.sprint, t.id))
 
 
 def latest(project: Project, ticket_id: str) -> Optional[BuildRecord]:
@@ -102,9 +124,13 @@ def build_next(deps: Deps, project_id: str, git: GitHost | None = None,
     deps.tracer.record(project_id, {"type": "build_start", "ticket": ticket.id, "branch": branch})
     try:
         result = developer.run(deps.llm_for(project.id, developer.NAME), project, ticket)
+        llm = deps.llm_for(project.id, developer.NAME)
         files = {f["path"].strip(): f["content"] for f in result.get("files", []) if f.get("path", "").strip()}
-        if not any(developer.is_test_file(p) for p in files):
-            raise GitRuleError("The change has no unit tests; the definition of done requires them")
+        if developer.needs_tests(files):
+            files.update(developer.add_tests(llm, project, ticket, files))
+            if developer.needs_tests(files):
+                raise GitRuleError("The change has code but no unit tests, even after asking again; "
+                                   "the definition of done requires them")
         guarded = GuardedGit(git)
         guarded.create_branch(branch)
         record.commit = guarded.commit_files(branch, files, f"{ticket.key}: {ticket.summary}", ticket.key)

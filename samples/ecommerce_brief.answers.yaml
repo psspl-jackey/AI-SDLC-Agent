@@ -23,10 +23,12 @@ gaps:
     type: sow
     text: '"Launch before Diwali" has no year or date; timeline feasibility unknown'
     match: [[diwali, launch, deadline, timeline, release date]]
+    exclude: [post-launch, support period, maintenance]
   - id: P-03
     type: sow
     text: Platforms not stated (Android, iOS or both)
     match: [[platform, android, ios]]
+    exclude: [version, minimum, devices and os]
   - id: P-04
     type: sow
     text: Login method not stated
@@ -47,6 +49,7 @@ gaps:
     type: domain_checklist
     text: Returns and cancellations missing (table stakes)
     match: [[return, cancel, refund]]
+    exclude: [consumer protection]
   - id: P-09
     type: domain_checklist
     text: Order and delivery notifications missing (table stakes)
@@ -54,7 +57,8 @@ gaps:
   - id: P-10
     type: domain_checklist
     text: Order tracking missing (table stakes)
-    match: [[track, shipment status, delivery status, order status]]
+    match: [[order tracking, track order, track their order, track orders, tracking of orders, shipment,
+             delivery status, order status]]
   - id: P-11
     type: domain_checklist
     text: Ratings and reviews missing (common)

@@ -30,7 +30,7 @@ def approve(deps, project, gate):
 
 def stage1(deps):
     project = deps.store.create("OLX-style app")
-    start_intake(deps, project, [RawInput(kind="text", value="Build an app like OLX for Gujarat")])
+    start_intake(deps, project, [RawInput(kind="text", value="Build an Android and iOS app like OLX for Gujarat")])
     finish_intake(deps, project, {"competitors": "https://ref-one.example, https://ref-two.example"})
     return run_stage1(deps, project.id)
 

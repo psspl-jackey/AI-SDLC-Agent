@@ -9,7 +9,7 @@ from sdlc_agent.state.models import (
 
 
 @pytest.mark.parametrize("raw,expected", [
-    (RawInput(kind="text", value="Build an app like OLX for Gujarat"), InputType.ONE_LINE),
+    (RawInput(kind="text", value="Build an Android and iOS app like OLX for Gujarat"), InputType.ONE_LINE),
     (RawInput(kind="text", value="Line one\nLine two"), InputType.NOTES),
     (RawInput(kind="url", value="https://example.com"), InputType.URL),
     (RawInput(kind="url", value="https://play.google.com/store/apps/details?id=x"), InputType.APP_STORE_URL),
@@ -80,3 +80,15 @@ def test_reads_word_and_excel(tmp_path):
     wb.save(tmp_path / "features.xlsx")
     chunks = read_input(RawInput(kind="file", value=str(tmp_path / "features.xlsx")))
     assert "Chat | High" in chunks[0].text and chunks[0].source.ref == "features.xlsx sheet Features"
+
+
+def test_brief_keeps_only_platforms_the_client_mentioned():
+    from sdlc_agent.intake.brief import _stated_platforms
+    from sdlc_agent.state.models import Chunk, SourceRef
+
+    one_line = [Chunk(text="Build an app like OLX for Gujarat", source=SourceRef(kind="intake"))]
+    assert _stated_platforms(["web", "android"], one_line) == []  # the model invented both
+    stated = [Chunk(text="We need an iPhone app and an admin side", source=SourceRef(kind="intake"))]
+    assert _stated_platforms(["ios", "admin panel", "web"], stated) == ["ios", "admin panel"]
+    crawled = [Chunk(text="Download on Android", source=SourceRef(kind="url", ref="https://x"))]
+    assert _stated_platforms(["android"], crawled) == []  # a reference site is not the client's request

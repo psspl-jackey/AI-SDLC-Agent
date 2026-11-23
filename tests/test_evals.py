@@ -68,7 +68,7 @@ def _key(tmp_path, body: str):
 
 KEY = """
 name: classifieds_fake
-input: {kind: text, value: "Build an app like OLX for Gujarat"}
+input: {kind: text, value: "Build an Android and iOS app like OLX for Gujarat"}
 intake_answers: {region: "Gujarat, India"}
 gaps:
   - {id: P-1, text: Search filters undefined, match: [[filter]]}
@@ -107,11 +107,11 @@ def test_cli_runs_stage0_and_stage1_and_writes_reports(tmp_path, settings, fake_
     assert main([str(key_path)], deps=deps) == 0
 
     out = capsys.readouterr().out
-    assert "classifieds_fake: gaps 2/3" in out  # filters and scale found, moderation missed
+    assert "classifieds_fake: gaps 3/3" in out  # unanswered checklist items (moderation) count as missing
     reports = list((settings.data_dir / "reports").glob("*-classifieds_fake.md"))
     assert len(reports) == 1
     text = reports[0].read_text()
-    assert "**missed** | P-3" in text and "Gate 1 coverage check: passed" in text
+    assert "found | P-3" in text and "Gate 1 coverage check: passed" in text
     assert list((settings.data_dir / "reports").glob("*-classifieds_fake.json"))
 
 
@@ -156,3 +156,19 @@ def test_exclude_terms_reject_a_match():
     item = KeyItem(id="X", text="", match=(("chat",),), exclude=("notif",))
     assert item.matches("In-app buyer-seller chat")
     assert not item.matches("Push notifications for chats")
+
+
+
+@pytest.mark.parametrize("key_file, wording", [
+    # False matches seen in the first qwen2.5:7b run; none of these is the planted gap.
+    ("ecommerce_brief.answers.yaml", "No details on maintenance and support, such as post-launch support period"),
+    ("ecommerce_brief.answers.yaml", "No information on devices and OS, such as minimum Android and iOS versions"),
+    ("ecommerce_brief.answers.yaml", "No information on analytics, such as what must be tracked."),
+    ("ecommerce_brief.answers.yaml", "Compliance check: Consumer Protection (E-Commerce) Rules, 2020: return policy"),
+    ("one_line_classifieds.answers.yaml", "No devices and OS requirements are stated (minimum Android version)"),
+])
+def test_known_false_matches_stay_unmatched(key_file, wording):
+    key = load_key(SAMPLES / key_file)
+    planted = {"ecommerce_brief.answers.yaml": {"P-02", "P-03", "P-08", "P-10"},
+               "one_line_classifieds.answers.yaml": {"P-01"}}[key_file]
+    assert not [g.id for g in key.gaps if g.id in planted and g.matches(wording)]

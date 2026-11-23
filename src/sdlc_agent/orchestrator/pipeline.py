@@ -19,7 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from ..agents import domain_research, estimator, planner, platform_decision, requirements_analyst, reviewer, skills_setup, solution_design
 from ..config import Settings, get_settings
 from ..gaps.register import add_gap, coverage_check, gate_passed, gate_status
-from ..intake.brief import apply_intake_answers, build_brief, completeness_of, extract_sow_lines
+from ..intake.brief import apply_intake_answers, build_brief, completeness_of, extract_sow_lines, fill_thin_brief
 from ..intake.detect import detect_input_type, overall_input_type
 from ..intake.questionnaire import IntakeQuestion, build_questionnaire
 from ..intake.readers import read_input
@@ -83,6 +83,9 @@ def start_intake(deps: Deps, project: Project, inputs: list[RawInput]) -> list[I
 def finish_intake(deps: Deps, project: Project, answers: dict[str, str]) -> None:
     project.intake_answers.update({k: v for k, v in answers.items() if v and v.strip()})
     project.brief = apply_intake_answers(project.brief, project.intake_answers)
+    added = fill_thin_brief(project.brief)
+    if added:
+        project.log(f"Thin input: added {added} table-stakes feature(s) from the domain pack, tagged inferred")
     project.stage_status[Stage.INTAKE] = StageStatus.APPROVED
     project.log("Intake questionnaire answered; brief finalised")
     deps.store.save(project)

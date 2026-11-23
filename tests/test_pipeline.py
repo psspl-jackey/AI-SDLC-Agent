@@ -14,7 +14,7 @@ def deps(settings, fake_llm):
 
 def run_to_gate(deps):
     project = deps.store.create("OLX-style app")
-    questions = start_intake(deps, project, [RawInput(kind="text", value="Build an app like OLX for Gujarat")])
+    questions = start_intake(deps, project, [RawInput(kind="text", value="Build an Android and iOS app like OLX for Gujarat")])
     asked = {q.key for q in questions}
     assert "domain" not in asked  # the brief already knows it
     finish_intake(deps, project, {"competitors": "https://ref-one.example, https://ref-two.example, QuickSell"})
@@ -60,3 +60,14 @@ def test_every_model_call_is_traced(deps):
     totals = deps.tracer.totals(project.id)
     assert totals["calls"] == len(deps.llm.calls) > 0
     assert totals["cost_usd"] > 0
+
+
+
+def test_checklist_rules_are_enforced_by_code(deps):
+    project = run_to_gate(deps)
+    ids = {g.description.split("(")[-1].split(")")[0] for g in project.gaps if g.source is GapSource.DOMAIN_CHECKLIST}
+    assert "CL-01" not in ids  # covered, with a real planned feature cited
+    assert "CL-02" in ids  # "covered" without citing a planned feature is treated as missing
+    assert "CL-10" in ids  # table stakes the model never answered are missing
+    assert "CL-17" not in ids  # a common item may be ruled not relevant
+    assert any("CL-02 claimed covered without citing" in n for n in project.notes)
