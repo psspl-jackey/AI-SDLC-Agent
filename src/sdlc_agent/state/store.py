@@ -21,6 +21,7 @@ def next_id(prefix: str, existing: Iterable[str]) -> str:
 class ProjectStore:
     def __init__(self, root: Path):
         self.root = Path(root)
+        self.unreadable: list[tuple[str, str]] = []
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, project_id: str) -> Path:
@@ -42,5 +43,12 @@ class ProjectStore:
         return Project.model_validate_json(self._path(project_id).read_text(encoding="utf-8"))
 
     def list(self) -> list[Project]:
-        projects = [Project.model_validate_json(p.read_text(encoding="utf-8")) for p in self.root.glob("*.json")]
+        """Every readable project. A file that does not load (corrupt, or written by newer code than the
+        running process) is skipped and reported in `unreadable`, so one bad file never hides the rest."""
+        projects, self.unreadable = [], []
+        for path in self.root.glob("*.json"):
+            try:
+                projects.append(Project.model_validate_json(path.read_text(encoding="utf-8")))
+            except (ValueError, OSError) as exc:
+                self.unreadable.append((path.stem, str(exc).splitlines()[0][:200]))
         return sorted(projects, key=lambda p: p.created_at, reverse=True)

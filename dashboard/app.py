@@ -62,6 +62,8 @@ projects = deps.store.list()
 with st.sidebar:
     st.subheader("AI SDLC Agent")
     st.caption(f"Model: {deps.llm.name}")
+    for pid, err in deps.store.unreadable:
+        st.warning(f"Project {pid} could not be loaded: {err}. If the code was just updated, restart the dashboard.")
     ids = ["New project"] + [p.id for p in projects]
     labels = ["New project"] + [f"{p.name} ({p.id})" for p in projects]
     current_id = st.session_state.get("project_id", "New project")

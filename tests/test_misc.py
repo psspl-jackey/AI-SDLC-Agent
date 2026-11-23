@@ -48,3 +48,14 @@ def test_pack_entries_have_exactly_id_name_tier():
             assert feat["tier"] in ("table_stakes", "common"), f"{name} {feat['id']}"
         for c in pack.get("compliance", []) or []:
             assert set(c) == {"region", "note"}, f"{name} compliance: {c}"
+
+
+
+def test_store_skips_an_unreadable_project(tmp_path):
+    from sdlc_agent.state.store import ProjectStore
+
+    store = ProjectStore(tmp_path)
+    good = store.create("good")
+    (tmp_path / "broken.json").write_text('{"id": "broken", "requirements": [{"source": {"kind": "from_the_future"}}]}')
+    assert [p.id for p in store.list()] == [good.id]
+    assert store.unreadable and store.unreadable[0][0] == "broken"
