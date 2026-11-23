@@ -120,12 +120,43 @@ def build_matrix(project: Project, result: dict) -> tuple[PlatformMatrix, list[s
         row.source = "client"
         row.reason = row.reason or "Stated by the client."
 
+    for name in (normalise(x) for x in (project.brief.excluded_platforms if project.brief else [])):
+        if name in stated:
+            continue
+        row = rows.setdefault(name, PlatformDecision(platform=name, included=False))
+        if row.included:
+            notes.append(f"Platform decision: the agent included {name}, but the client excluded it; left it out")
+        row.included, row.source, row.reason, row.requirement_ids = False, "client", "Excluded by the client.", []
+
     # A stated mobile platform with no requirements mirrors its sibling: the apps offer the same features.
     for name, sibling in (("ios", "android"), ("android", "ios")):
         row, other = rows.get(name), rows.get(sibling)
         if row and row.included and not row.requirement_ids and other and other.included and other.requirement_ids:
             row.requirement_ids = list(other.requirement_ids)
             notes.append(f"Platform decision: {name} had no requirements; copied them from {sibling}")
+
+    # Client apps need a server unless the client said no: the model sometimes forgets the backend.
+    excluded = {normalise(x) for x in (project.brief.excluded_platforms if project.brief else [])}
+    clients = [r for n, r in rows.items() if n in ("android", "ios", "web", "admin_panel") and r.included]
+    if clients and "backend" not in excluded and not (rows.get("backend") and rows["backend"].included):
+        if "backend" not in rows or not rows["backend"].reason:
+            served = list(dict.fromkeys(rid for r in clients for rid in r.requirement_ids))
+            rows["backend"] = PlatformDecision(platform="backend", included=True, requirement_ids=served,
+                                               reason="Client apps need a backend for data, accounts and APIs "
+                                                      "(included by default; not excluded by the client).")
+            notes.append("Platform decision: backend included by default because client apps are included")
+
+    # A functional requirement the model mapped nowhere goes to every included client app and the backend:
+    # over-estimating is safer than silently dropping work. Logged for review at Gate 2.
+    included_rows = [r for r in rows.values() if r.included]
+    served = {rid for r in included_rows for rid in r.requirement_ids}
+    for r in project.active_requirements():
+        if r.kind == "functional" and r.id not in served and included_rows:
+            for row in included_rows:
+                if row.platform != "admin_panel" or len(included_rows) == 1:
+                    row.requirement_ids.append(r.id)
+            notes.append(f"Platform decision: {r.id} was not mapped by the agent; assigned to every included app "
+                         "(review at Gate 2)")
 
     for name in CORE_PLATFORMS:
         if name not in rows:
@@ -135,6 +166,13 @@ def build_matrix(project: Project, result: dict) -> tuple[PlatformMatrix, list[s
 
     ordered = [rows[n] for n in CORE_PLATFORMS] + [r for n, r in rows.items() if n not in CORE_PLATFORMS]
     approach = result.get("approach")
+    chosen = project.brief.approach if project.brief else None
+    if chosen in _APPROACHES:
+        if approach != chosen:
+            notes.append(f"Platform decision: the agent suggested '{approach}'; kept the approach set at review: {chosen}")
+        approach = chosen
+        result = {**result, "approach_reason": result.get("approach_reason", "") if approach == result.get("approach")
+                  else "Set at the Stage 2 review."}
     return PlatformMatrix(
         decisions=ordered,
         approach=approach if approach in _APPROACHES else "not_applicable",

@@ -328,6 +328,31 @@ def run_stage2(deps: Deps, project_id: str) -> Project:
     return project
 
 
+
+def set_client_platforms(deps: Deps, project_id: str, included: list[str], excluded: list[str],
+                         note: str = "", approach: str | None = None) -> Project:
+    """A person sets platforms Yes/No at the Stage 2 review. Yes becomes client-stated (the agent cannot drop
+    it), No is excluded (the agent cannot add it). Stage 2 re-runs to map requirements, which resets Stages 3-9."""
+    from ..agents.platform_decision import normalise
+
+    project = deps.store.load(project_id)
+    inc = list(dict.fromkeys(normalise(x) for x in included if str(x).strip()))
+    exc = [x for x in dict.fromkeys(normalise(x) for x in excluded if str(x).strip()) if x not in inc]
+    if not inc:
+        raise ValueError("Choose at least one platform")
+    before = [d.platform for d in project.platform_matrix.included()] if project.platform_matrix else []
+    if approach not in (None, "", "native", "cross_platform", "web_only", "not_applicable"):
+        raise ValueError(f"Unknown approach {approach}")
+    project.brief.platforms, project.brief.excluded_platforms = inc, exc
+    project.brief.approach = approach or None
+    project.log(f"Platforms set at Stage 2 review: yes {', '.join(inc)}; no {', '.join(exc) or 'none'}; "
+                f"approach {approach or 'agent decides'}"
+                + (f" ({note})" if note else "") + f". Was: {', '.join(before) or 'none'}. Stage 2 re-runs; "
+                "Stages 3-9 must run again.")
+    deps.store.save(project)
+    return run_stage2(deps, project_id)
+
+
 # ---------- Stage 3: estimate, then Gate 2 ----------
 
 def run_stage3(deps: Deps, project_id: str) -> Project:

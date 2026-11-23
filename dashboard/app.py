@@ -16,7 +16,8 @@ from sdlc_agent.agents import estimator, handover, planner, qa
 from sdlc_agent.agents.platform_decision import platform_check
 from sdlc_agent.orchestrator import (
     Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
-    review_plan, run_stage2, run_stage3, run_stage4, run_stage5, run_stage6, start_intake, submit_change_request,
+    review_plan, run_stage2, run_stage3, run_stage4, run_stage5, run_stage6, set_client_platforms, start_intake,
+    submit_change_request,
 )
 from sdlc_agent.orchestrator.build import (
     build_next, failed_tickets, in_scope, latest, local_host, mark_done_by_developers, mark_merged,
@@ -672,6 +673,40 @@ def change_requests_screen(project) -> None:
                     st.write(f"- {label} **{rid}**: {reqs[rid].text if rid in reqs else ''}")
 
 
+def platform_switches(project) -> None:
+    """Yes/No per platform, decided by a person at the Stage 2 review (recorded as the client's decision)."""
+    from sdlc_agent.state.models import CORE_PLATFORMS
+
+    m = project.platform_matrix
+    with st.expander("Change platforms (Yes / No) and approach"):
+        st.caption("Your choice is recorded as the client's decision: Yes cannot be dropped by the agent, No cannot "
+                   "be added back. Saving re-runs Stage 2 to map the requirements.")
+        current = {d.platform: d.included for d in m.decisions}
+        choice = {name: st.toggle(name.replace("_", " "), value=current.get(name, False), key=f"pf_{name}")
+                  for name in CORE_PLATFORMS}
+        later = [s for s in (Stage.PROPOSAL, Stage.DESIGN, Stage.SKILLS, Stage.PLAN, Stage.BUILD, Stage.QA_RELEASE,
+                             Stage.HANDOVER) if project.stage_status[s] is not StageStatus.PENDING]
+        if later:
+            st.warning(f"Saving resets {len(later)} later stage(s) of this project (estimate onward, including any "
+                       "approvals and sign-off); they must be run again.")
+        options = ["agent decides", "cross_platform", "native", "web_only"]
+        set_before = project.brief.approach if project.brief and project.brief.approach else "agent decides"
+        approach = st.selectbox("Delivery approach for the client apps", options, index=options.index(set_before),
+                                help="cross_platform: one codebase for Android and iOS; native: separate apps")
+        note = st.text_input("Reason (optional)", key="pf_note")
+        changed = any(choice[n] != current.get(n, False) for n in CORE_PLATFORMS) or approach != set_before
+        if st.button("Save platforms and re-run Stage 2", disabled=not changed, type="primary"):
+            with st.spinner("Re-running the platform decision"):
+                try:
+                    set_client_platforms(deps, project.id, [n for n in CORE_PLATFORMS if choice[n]],
+                                         [n for n in CORE_PLATFORMS if not choice[n]], note,
+                                         None if approach == "agent decides" else approach)
+                except Exception as exc:
+                    st.error(friendly_error(exc))
+                    return
+            st.rerun()
+
+
 def estimate_screen(project) -> None:
     st.header("Stage 3: estimate")
     st.write("Tasks with min, likely and max hours. Totals, the expected value and the risk buffer are computed "
@@ -732,6 +767,7 @@ def platforms_screen(project) -> None:
                    "Source": d.source, "Reason": d.reason, "Requirements": ", ".join(d.requirement_ids)}
                   for d in m.decisions], hide_index=True, width="stretch")
     st.write(f"**Delivery approach:** {m.approach.replace('_', ' ')}. {m.approach_reason}")
+    platform_switches(project)
     report = platform_check(project)
     if report.passed:
         st.success("Platform check passed.")

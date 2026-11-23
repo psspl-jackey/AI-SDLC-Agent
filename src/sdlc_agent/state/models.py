@@ -89,6 +89,8 @@ class ProjectBrief(BaseModel):
     target_users: list[str] = Field(default_factory=list)
     intent: Literal["new", "rebuild", "like_reference", "unknown"] = "unknown"
     platforms: list[str] = Field(default_factory=list)
+    excluded_platforms: list[str] = Field(default_factory=list)  # platforms the client said no to
+    approach: Optional[str] = None  # delivery approach chosen by a person at Stage 2 review; overrides the agent
     features: list[BriefItem] = Field(default_factory=list)
     nfrs: list[BriefItem] = Field(default_factory=list)
     constraints: list[BriefItem] = Field(default_factory=list)
