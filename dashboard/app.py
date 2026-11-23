@@ -197,7 +197,8 @@ def questions_screen(project) -> None:
         st.rerun()
     done = [q for q in project.questions if q.answer]
     if done:
-        st.info("Answers are saved. Run Stage 1 again from Overview to apply them to the requirements and gaps.")
+        st.info("Each answer is recorded as a requirement and closes its gap. Answers that change scope after "
+                "Gate 1 belong in a change request.")
         with st.expander(f"Answered ({len(done)})"):
             for q in done:
                 st.write(f"**{q.id}** {q.text}  \nAnswer: {q.answer}")

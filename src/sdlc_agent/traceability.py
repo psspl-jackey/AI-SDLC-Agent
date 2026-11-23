@@ -93,7 +93,7 @@ def _row(project: Project, r: Requirement) -> TraceRow:
         row.status = "designed"
 
     functional = r.kind == "functional"
-    if not r.sow_line_ids and r.source.kind not in ("client_decision", "inferred"):
+    if not r.sow_line_ids and r.source.kind not in ("client_decision", "client_answer", "inferred"):
         row.breaks.append("no input line")
     if functional and _ran(project, Stage.PLATFORM) and not row.platforms:
         row.breaks.append("no platform")

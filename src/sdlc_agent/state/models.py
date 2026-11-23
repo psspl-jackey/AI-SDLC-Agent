@@ -57,7 +57,7 @@ class Completeness(str, Enum):
 class SourceRef(BaseModel):
     """Where an item came from: a file and page, a URL, the intake form, or inferred by an agent."""
 
-    kind: Literal["file", "url", "intake", "inferred", "change_request", "client_decision"]
+    kind: Literal["file", "url", "intake", "inferred", "change_request", "client_decision", "client_answer"]
     ref: str = ""
 
     def label(self) -> str:
