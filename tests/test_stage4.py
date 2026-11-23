@@ -94,10 +94,25 @@ def _arch(stacks, components=()):
 def test_check_rejects_mixed_stacks_for_cross_platform_and_unknown_packs():
     project = _project("cross_platform", ["android", "ios", "backend"])
     project.design, _ = solution_design.build_design(
-        project, _arch({"android": "flutter", "ios": "swift_ios", "backend": "django"}))
+        project, _arch({"android": "flutter", "ios": "flutter", "backend": "django"}))
+    project.design.stacks = [s if s.platform != "ios" else s.model_copy(update={"pack": "swift_ios"})
+                             for s in project.design.stacks]  # edited by hand after the build
     failures = solution_design.design_check(project).failures
     assert any("cross-platform" in f for f in failures)
     assert any("backend: stack 'django' has no tech pack" in f for f in failures)
+
+
+@pytest.mark.parametrize("approach, picked, expected", [
+    ("cross_platform", {"android": "react_native", "ios": "swift_ios"}, {"android": "react_native", "ios": "react_native"}),
+    ("cross_platform", {"android": "kotlin_android", "ios": "flutter"}, {"android": "flutter", "ios": "flutter"}),
+    ("native", {"android": "flutter", "ios": "swift_ios"}, {"android": "kotlin_android", "ios": "swift_ios"}),
+])
+def test_mobile_stacks_follow_the_stage2_approach(approach, picked, expected):
+    project = _project(approach, ["android", "ios", "backend"])
+    project.design, notes = solution_design.build_design(project, _arch({**picked, "backend": "nodejs_backend"}))
+    assert {s.platform: s.pack for s in project.design.stacks if s.platform != "backend"} == expected
+    assert any("stack changed from" in n for n in notes)
+    assert not any("Approach is" in f for f in solution_design.design_check(project).failures)
 
 
 def test_check_rejects_a_pack_on_the_wrong_platform_and_unscreened_apps():

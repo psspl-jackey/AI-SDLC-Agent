@@ -129,6 +129,43 @@ def run(llm: LLMClient, project: Project) -> dict:
     return result
 
 
+def _align_mobile_stacks(project: Project, stacks: dict[str, StackChoice]) -> list[str]:
+    """Make the Android and iOS packs follow the Stage 2 approach; small models often mix them."""
+    m = project.platform_matrix
+    included = {d.platform for d in m.included()} if m else set()
+    if m is None or not {"android", "ios"} <= included or m.approach not in ("cross_platform", "native"):
+        return []
+    packs = load_tech_packs()
+
+    def fits(name: str, platform: str) -> bool:
+        p = packs.get(name, {})
+        return p.get("approach") == m.approach and platform in p.get("platforms", [])
+
+    before = {p: stacks[p].pack if p in stacks else None for p in ("android", "ios")}
+    if m.approach == "cross_platform":
+        chosen = next((before[p] for p in ("android", "ios")
+                       if before[p] and fits(before[p], "android") and fits(before[p], "ios")), None)
+        chosen = chosen or next(n for n in packs if fits(n, "android") and fits(n, "ios"))
+        target = {"android": chosen, "ios": chosen}
+    else:
+        target = {p: before[p] if before[p] and fits(before[p], p) else next(n for n in packs if fits(n, p))
+                  for p in ("android", "ios")}
+    notes = []
+    for p in ("android", "ios"):
+        if before[p] == target[p]:
+            continue
+        reason = f"Set by code to follow the {m.approach.replace('_', '-')} approach chosen at Stage 2."
+        if p in stacks:
+            old = stacks[p]
+            stacks[p] = StackChoice(platform=p, pack=target[p], reason=reason,
+                                    alternatives=[a for a in [old.pack, *old.alternatives] if a and a != target[p]])
+        else:
+            stacks[p] = StackChoice(platform=p, pack=target[p], reason=reason, alternatives=[])
+        notes.append(f"Solution design: {p} stack changed from {before[p] or 'none'} to {target[p]} "
+                     f"({m.approach.replace('_', '-')} approach)")
+    return notes
+
+
 def build_design(project: Project, result: dict) -> tuple[SolutionDesign, list[str]]:
     notes: list[str] = []
     req_ids = {r.id for r in project.active_requirements()}
@@ -143,6 +180,7 @@ def build_design(project: Project, result: dict) -> tuple[SolutionDesign, list[s
         if platform and platform not in stacks:
             stacks[platform] = StackChoice(platform=platform, pack=normalise(s.get("pack", "")),
                                            reason=s.get("reason", ""), alternatives=s.get("alternatives", []))
+    notes += _align_mobile_stacks(project, stacks)
 
     components: dict[str, Component] = {}
     for c in arch.get("components", []):
