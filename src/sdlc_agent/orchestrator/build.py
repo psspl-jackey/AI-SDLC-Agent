@@ -33,11 +33,16 @@ NON_CODING_ROLES = re.compile(
     r"business analyst|\bba\b|delivery|account|content|copywrit|marketing", re.IGNORECASE)
 NON_CODING_TITLES = re.compile(r"^\[[^\]]*\]\s*(design|wireframe|mock-?up|test plan|plan |user research|"
                                r"project management|documentation of requirements)", re.IGNORECASE)
+# Releasing is people's work, checked by the Stage 8 release checklist; it wins even over "build".
+RELEASE_TITLES = re.compile(r"^\[[^\]]*\]\s*((prepare (and|for) )?(release|deploy|publish|launch|go[- ]live)|"
+                            r"(submit|upload)\w* .*(app|play) store)", re.IGNORECASE)
 
 
 def is_agent_ticket(t: Ticket) -> bool:
-    """The developer agent writes code. Design, QA planning, project management and analysis tickets
-    go to the team, who mark them done on the Build screen."""
+    """The developer agent writes code. Design, QA planning, project management, analysis and release
+    tickets go to the team, who mark them done on the Build screen (release is Stage 8's checklist)."""
+    if RELEASE_TITLES.search(t.summary):
+        return False
     builds_code = re.search(r"\b(implement|build|develop|code|integrate|set ?up)\w*", t.summary, re.IGNORECASE)
     if NON_CODING_TITLES.search(t.summary) and not builds_code:
         return False

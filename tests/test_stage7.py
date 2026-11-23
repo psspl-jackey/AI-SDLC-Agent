@@ -128,6 +128,10 @@ def test_non_coding_tickets_go_to_the_team():
     assert is_agent_ticket(t("[web] Build design system components", "UI Developer"))
     assert is_agent_ticket(t("[web] Design and implement ad category selection", "Frontend Developer"))
     assert not is_agent_ticket(t("[web] Design the checkout wireframes", "Frontend Developer"))
+    assert not is_agent_ticket(t("[common] Prepare and release application to app stores or web", "DevOps Engineer"))
+    assert not is_agent_ticket(t("[android] Submit the build to the Play Store", "Mobile Developer"))
+    assert not is_agent_ticket(t("[backend] Deploy to production", "DevOps Engineer"))
+    assert is_agent_ticket(t("[common] Set up CI pipeline and deploy scripts", "DevOps Engineer"))
 
 
 def test_docs_only_change_needs_no_tests_but_code_does():

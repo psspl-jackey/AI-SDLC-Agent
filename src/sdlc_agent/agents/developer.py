@@ -22,7 +22,10 @@ the project's skills (architecture, conventions, security, testing). Write compl
 Every change that adds code MUST include unit test files in the stack's test folder (for example
 test/..._test.dart, src/__tests__/....test.tsx, tests/test_....py). Change only what the ticket needs. Never include secrets, API
 keys or passwords; read configuration from the environment. Payment uses the dummy payment gateway with
-static responses; do not integrate real payment providers or other third-party services."""
+static responses; do not integrate real payment providers or other third-party services.
+Keep the whole reply short (under about 2,500 words): at most 6 files, only the code this ticket needs,
+no generated or boilerplate files (lock files, build outputs, Gradle wrappers, icons); put TODO comments
+where later tickets will continue."""
 SHAPE = {"files": Dicts({"path": "str", "content": "str"}), "summary": "str", "notes": "strs"}
 SCHEMA = 'Return JSON: {"files": [{"path": str, "content": str}], "summary": str, "notes": [str]}'
 
