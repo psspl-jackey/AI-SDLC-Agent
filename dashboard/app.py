@@ -16,13 +16,17 @@ from sdlc_agent.agents import estimator, handover, planner, qa
 from sdlc_agent.agents.platform_decision import platform_check
 from sdlc_agent.orchestrator import (
     Deps, apply_change_request, decide_gate, finish_intake, gate_failures, record_client_decision, run_stage1,
-    review_plan, run_stage2, run_stage3, run_stage4, run_stage5, run_stage6, set_client_platforms, start_intake,
+    review_plan, run_stage2, run_stage3, run_stage4, run_stage5, run_stage6, set_client_platforms, set_ui_direction,
+    start_intake,
     submit_change_request,
 )
 from sdlc_agent.orchestrator.build import (
     build_next, failed_tickets, in_scope, latest, local_host, mark_done_by_developers, mark_merged,
 )
-from sdlc_agent.orchestrator.apps import add_starter_apps, app_status, check_apps, start_apps, stop_apps
+from sdlc_agent.orchestrator.apps import (
+    add_starter_apps, app_status, apply_theme, check_apps, start_apps, stop_apps,
+)
+from sdlc_agent.agents.ui_designer import build_theme
 from sdlc_agent.build.starters import plan_apps, seed_data
 from sdlc_agent.orchestrator.handover import record_signoff, run_stage9
 from sdlc_agent.orchestrator.release import record_test_result, run_stage8, set_checklist_item
@@ -334,7 +338,65 @@ def design_screen(project) -> None:
         st.rerun()
     if project.design is None:
         return
+    theme_section(project)
     st.markdown(exports.architecture_markdown(project))
+
+
+def theme_section(project) -> None:
+    """The look and feel every app follows: domain default, adjusted by the client's UI direction."""
+    st.subheader("UI theme and UX")
+    t = project.design.theme or build_theme(project)
+    origin = ("from the client's UI direction" if t.source == "client_direction"
+              else f"default for {project.domain_pack or 'this kind of'} product")
+    st.caption(f"Decided by the system ({origin}); colours are checked for readability by code. The apps read every "
+               "colour and font from this theme, so changing it restyles the website, admin panel and mobile app.")
+    radius = {"sharp": 6, "soft": 12, "round": 22}[t.radius]
+    fonts = {"sans": "system-ui, sans-serif", "rounded": "ui-rounded, 'SF Pro Rounded', system-ui, sans-serif",
+             "serif": "Georgia, serif"}[t.font]
+    swatches = "".join(
+        f"<div style='text-align:center;font-size:12px'><div style='width:56px;height:40px;border-radius:8px;"
+        f"background:{v};border:1px solid #0002'></div>{k}<br><code>{v}</code></div>"
+        for k, v in [("primary", t.primary), ("accent", t.accent), ("background", t.background), ("text", t.text),
+                     ("muted", t.muted)])
+    preview = (
+        f"<div style='background:{t.background};padding:16px;border-radius:12px;font-family:{fonts};color:{t.text}'>"
+        f"<div style='background:{t.primary};color:{t.on_primary};padding:16px;border-radius:{radius}px'>"
+        f"<div style='font-size:20px;font-weight:800'>{t.brand_name}</div><div style='opacity:.9'>{t.tagline}</div></div>"
+        f"<div style='display:flex;gap:10px;margin-top:12px;flex-wrap:wrap'>"
+        f"<span style='background:{t.primary};color:{t.on_primary};padding:8px 14px;border-radius:{radius}px;font-weight:600'>Primary action</span>"
+        f"<span style='background:{t.accent};color:{t.on_accent};padding:8px 14px;border-radius:{radius}px;font-weight:600'>＋ Sell</span>"
+        f"<span style='background:#fff;border:1px solid #E2E6EB;padding:8px 14px;border-radius:{radius}px'>Secondary</span></div>"
+        f"<div style='background:#fff;border:1px solid #E2E6EB;border-radius:{radius}px;margin-top:12px;padding:12px;max-width:240px'>"
+        f"<div style='font-weight:800;font-size:18px'>₹38,000</div><div>Card title</div>"
+        f"<div style='color:{t.muted};font-size:13px'>📍 City · 2 h ago</div></div></div>")
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        st.markdown(f"<div style='display:flex;gap:10px;flex-wrap:wrap'>{swatches}</div>", unsafe_allow_html=True)
+        st.write(f"**Font** {t.font} · **Corners** {t.radius} · **Density** {t.density} · **Mood** {t.mood}")
+        st.write("**UX principles every screen follows**")
+        for principle in t.ux_principles:
+            st.write(f"- {principle}")
+        if t.adjustments:
+            st.info("Code adjusted the direction: " + "; ".join(t.adjustments))
+    with c2:
+        st.markdown(preview, unsafe_allow_html=True)
+    with st.form("ui_direction"):
+        text = st.text_area("UI direction (client or team suggestions)", value=project.ui_direction,
+                            placeholder="e.g. green and premium; simple for older users with big text; "
+                                        "warm colours like a local market",
+                            help="Plain words are enough. The system turns them into a theme and keeps it readable. "
+                                 "Leave empty for the domain default.")
+        save = st.form_submit_button("Update the theme", type="primary")
+    if save:
+        with st.spinner("Designing the theme"):
+            try:
+                updated = set_ui_direction(deps, project.id, text)
+                if updated.starter_apps:
+                    apply_theme(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+        st.rerun()
 
 
 def skills_screen(project) -> None:

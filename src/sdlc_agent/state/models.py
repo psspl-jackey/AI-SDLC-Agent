@@ -328,6 +328,35 @@ class DesignDecision(BaseModel):
     alternatives: list[str] = Field(default_factory=list)
 
 
+class UiTheme(BaseModel):
+    """Visual theme and UX principles for every app (Stage 4). Colours are checked for contrast by code."""
+    brand_name: str
+    tagline: str = ""
+    primary: str = "#2563EB"
+    on_primary: str = "#FFFFFF"  # text on primary buttons; chosen by code for contrast
+    accent: str = "#F59E0B"
+    on_accent: str = "#1F2933"
+    background: str = "#F6F7F9"
+    surface: str = "#FFFFFF"
+    text: str = "#1F2933"
+    muted: str = "#5F6B7A"
+    border: str = "#E2E6EB"
+    success: str = "#15803D"
+    warning: str = "#B45309"
+    danger: str = "#B91C1C"
+    font: Literal["sans", "rounded", "serif"] = "sans"
+    radius: Literal["sharp", "soft", "round"] = "soft"
+    density: Literal["comfortable", "compact"] = "comfortable"
+    text_scale: float = 1.0  # 1.15 when the direction asks for larger, easier-to-read text
+    mood: str = ""
+    ux_principles: list[str] = Field(default_factory=list)
+    category_icons: dict[str, str] = Field(default_factory=dict)
+    safety_tips: list[str] = Field(default_factory=list)
+    source: Literal["domain_default", "client_direction"] = "domain_default"
+    client_direction: str = ""
+    adjustments: list[str] = Field(default_factory=list)  # what code changed (contrast, unknown values...)
+
+
 class SolutionDesign(BaseModel):
     stacks: list[StackChoice] = Field(default_factory=list)
     components: list[Component] = Field(default_factory=list)
@@ -335,6 +364,7 @@ class SolutionDesign(BaseModel):
     endpoints: list[ApiEndpoint] = Field(default_factory=list)
     screens: list[Screen] = Field(default_factory=list)
     decisions: list[DesignDecision] = Field(default_factory=list)
+    theme: Optional[UiTheme] = None
     created_at: datetime = Field(default_factory=now)
 
 
@@ -497,6 +527,7 @@ class Project(BaseModel):
     skill_pack: Optional[SkillPack] = None  # Stage 5
     plan: Optional[Plan] = None  # Stage 6
     builds: list[BuildRecord] = Field(default_factory=list)  # Stage 7; kept as history across re-plans
+    ui_direction: str = ""  # client or team suggestions for the look and feel (Stage 4 theme)
     starter_apps: list[str] = Field(default_factory=list)  # Stage 7: app folders written from starters/
     run_checks: list[RunCheck] = Field(default_factory=list)  # Stage 7/8: install, test, start results
     release: Optional[Release] = None  # Stage 8

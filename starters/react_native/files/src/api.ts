@@ -5,13 +5,18 @@ import Constants from "expo-constants";
 const host = (Constants.expoConfig?.hostUri || "localhost").split(":")[0];
 export const API_URL = `http://${host}:{{api_port}}`;
 
-export type User = { id: number; name: string; email: string; role: string; city: string };
+export type User = { id: number; name: string; email: string; role: string; city: string; member_since: number };
+export type Seller = { id: number; name: string; member_since: number; phone_masked: string; verified: boolean };
 export type Category = { id: number; name: string };
 export type Item = {
   id: number; title: string; description: string; price: number; city: string; image_url: string;
-  category_id: number; category: string; seller: { id: number; name: string } | null; status: string; featured: boolean;
+  category_id: number; category: string; seller: Seller | null; status: string; featured: boolean;
+  created_at: string | null;
 };
-export type AppConfig = { app_name: string; item_label: string; items_label: string; currency: string; cities: string[] };
+export type AppConfig = {
+  app_name: string; item_label: string; items_label: string; currency: string; cities: string[];
+  tagline: string; category_icons: Record<string, string>; safety_tips: string[];
+};
 
 let token = ""; // kept in memory for the demo; use secure storage (Keychain / Keystore) in the real app
 export const setToken = (t: string) => { token = t; };

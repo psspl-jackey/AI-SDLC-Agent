@@ -26,3 +26,25 @@ nfrs:
 compliance:
   - {region: India, note: "Digital Personal Data Protection Act, 2023: consent, purpose limits, deletion requests"}
   - {region: India, note: "IT (Intermediary Guidelines) Rules, 2021: grievance officer and takedown process for user content"}
+
+# Default UI direction for Stage 4 (ui_designer). A client's "UI direction" adjusts it; code keeps
+# colours readable (contrast) and never uses a competitor's brand.
+ui:
+  tagline: Buy and sell near you
+  primary: "#0F766E"
+  accent: "#F59E0B"
+  font: rounded
+  radius: round
+  density: comfortable
+  mood: friendly, local, trustworthy
+  ux_principles:
+    - "Search first: a large search box and the buyer's city on every list screen"
+    - Photo-first cards with the price in large type and the city and age of the ad below
+    - "Posting an ad takes under a minute: three short steps, not one long form"
+    - "Trust signals near contact buttons: member since, verified phone, safety tips"
+    - "Moderation is visible: sellers see 'Under review', 'Live' or 'Sold' on their ads"
+  category_icons: {Mobiles: "📱", Cars: "🚗", Bikes: "🏍️", Property: "🏠", Electronics: "💻", Furniture: "🛋️", Jobs: "💼"}
+  safety_tips:
+    - Meet in a public place and check the item before you pay
+    - Never pay in advance or share an OTP
+    - Report ads that look too good to be true

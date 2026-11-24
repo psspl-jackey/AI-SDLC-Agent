@@ -24,11 +24,15 @@ from ..state.models import Project
 ROOT = Path(__file__).resolve().parents[3] / "starters"
 API_PORT = 8000
 
-DEMO_USERS = [
-    {"name": "Demo Admin", "email": "admin@demo.local", "password": "Admin@123", "role": "admin"},
-    {"name": "Ravi Patel", "email": "ravi@demo.local", "password": "Demo@123", "role": "user"},
-    {"name": "Priya Shah", "email": "priya@demo.local", "password": "Demo@123", "role": "user"},
+DEMO_USERS = [  # dummy people and phone numbers, local demo only
+    {"name": "Demo Admin", "email": "admin@demo.local", "password": "Admin@123", "role": "admin",
+     "phone": "", "member_since": 2024},
+    {"name": "Ravi Patel", "email": "ravi@demo.local", "password": "Demo@123", "role": "user",
+     "phone": "98765 43210", "member_since": 2023},
+    {"name": "Priya Shah", "email": "priya@demo.local", "password": "Demo@123", "role": "user",
+     "phone": "91234 56780", "member_since": 2025},
 ]
+HOURS_AGO = [2, 5, 9, 20, 26, 30, 49, 52, 75, 98, 120, 150, 200, 260]
 
 # Dummy catalogue per domain: (title, category, price, description)
 DOMAIN_SEED = {
@@ -188,12 +192,60 @@ def seed_data(project: Project) -> dict:
     for i, (title, category, price, description) in enumerate(seed["items"]):
         items.append({"title": title, "category": category, "price": price, "description": description,
                       "city": cities[i % len(cities)], "seller": sellers[i % len(sellers)],
-                      "featured": i % 5 == 0, "status": "pending" if i % 7 == 6 else "active"})
+                      "featured": i % 5 == 0, "status": "pending" if i % 7 == 6 else "active",
+                      "hours_ago": HOURS_AGO[i % len(HOURS_AGO)]})
+    theme = theme_for(project)
     return {
-        "config": {"app_name": app_name(project), "item_label": seed["labels"][0], "items_label": seed["labels"][1],
-                   "currency": currency, "cities": cities},
+        "config": {"app_name": theme.brand_name, "item_label": seed["labels"][0], "items_label": seed["labels"][1],
+                   "currency": currency, "cities": cities, "tagline": theme.tagline,
+                   "category_icons": theme.category_icons, "safety_tips": theme.safety_tips},
         "users": users, "categories": seed["categories"], "items": items,
     }
+
+
+def theme_for(project: Project):
+    """The approved theme, or the domain default when Stage 4 ran before themes existed."""
+    from ..agents.ui_designer import build_theme
+    return project.design.theme if project.design and project.design.theme else build_theme(project)
+
+
+RADIUS = {"sharp": (4, 6), "soft": (8, 12), "round": (14, 22)}  # (controls, cards)
+WEB_FONTS = {
+    "sans": "system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif",
+    "rounded": "ui-rounded, 'SF Pro Rounded', 'Nunito', 'Varela Round', system-ui, sans-serif",
+    "serif": "'Iowan Old Style', 'Palatino Linotype', Georgia, 'Noto Serif', serif",
+}
+
+
+def theme_ts(project: Project, mobile: bool = False) -> str:
+    """src/theme.ts: every colour, font and size the UI uses. Re-written when the theme changes."""
+    t = theme_for(project)
+    control, card = RADIUS[t.radius]
+    tokens = {
+        "brandName": t.brand_name, "tagline": t.tagline,
+        "colors": {k: getattr(t, k) for k in ("primary", "on_primary", "accent", "on_accent", "background", "surface",
+                                              "text", "muted", "border", "success", "warning", "danger")},
+        "radius": {"control": control, "card": card, "pill": 999},
+        "space": 8 if t.density == "compact" else 12,
+        "textScale": t.text_scale,
+        "font": t.font,
+        "fontFamily": None if mobile else WEB_FONTS[t.font],
+    }
+    tokens["colors"] = {re.sub(r"_(\w)", lambda m: m.group(1).upper(), k): v for k, v in tokens["colors"].items()}
+    body = json.dumps(tokens, indent=2, ensure_ascii=False)
+    return ("// Generated from the approved UI theme (Stage 4). Change the look on the Design screen;\n"
+            "// this file is re-written then. Mood: " + t.mood + "\n"
+            + f"export const theme = {body} as const;\n\nexport type Theme = typeof theme;\n")
+
+
+def theme_files(project: Project) -> dict[str, str]:
+    """Only the theme files of the starter apps in the repo (to apply a new theme without touching code)."""
+    apps, _ = plan_apps(project)
+    out = {}
+    for app in apps:
+        if app.dir in project.starter_apps and (app.spec.raw.get("ui") or app.surface == "mobile"):
+            out[f"{app.dir}/src/theme.ts"] = theme_ts(project, mobile=app.surface == "mobile")
+    return out
 
 
 def _render(text: str, values: dict[str, str]) -> str:
@@ -225,6 +277,8 @@ def render_apps(project: Project) -> tuple[dict[str, dict[str, str]], list[AppPl
             for f in sorted(base.rglob("*")):
                 if f.is_file():
                     files[f"{app.dir}/{prefix}{f.relative_to(base).as_posix()}"] = _render(f.read_text(encoding="utf-8"), values)
+        if app.spec.raw.get("ui") or app.surface == "mobile":
+            files[f"{app.dir}/src/theme.ts"] = theme_ts(project, mobile=app.surface == "mobile")
         if app.surface == "backend":
             files[f"{app.dir}/seed.json"] = json.dumps(seed, indent=2, ensure_ascii=False) + "\n"
         files[f"{app.dir}/README.md"] = app_readme(app, seed)

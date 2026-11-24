@@ -57,6 +57,11 @@ not new agents.
   admin panel and website, one Expo app for Android and iOS), then tickets extend them. `orchestrator/apps.py`
   installs, tests, starts and stops them on a worktree of develop (`build/runner.py`), results in
   `project.run_checks`; "Run the apps" on the Build screen shows links and an Expo Go QR code.
+- Done (same branch): UI theme and UX owned by the system. Stage 4 adds `design.theme` (agents/ui_designer.py):
+  domain pack `ui:` default, adjusted by a free-text UI direction (model maps it, code enforces WCAG AA contrast,
+  light backgrounds, allowed fonts/corners, explicit colour asks, larger text for older users, neutral brand).
+  Starter apps read every token from `src/theme.ts`; the Design screen shows swatches, a preview and the UX
+  principles; changing the direction re-writes only the theme files (`apply_theme`) and running apps reload.
 - Next: re-run the eval and keep tuning prompts; GitHub host and
   Docker sandbox (Stage 7 and automated test runs in Stage 8); rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.

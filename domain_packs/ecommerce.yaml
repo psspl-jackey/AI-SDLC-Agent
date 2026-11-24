@@ -25,3 +25,23 @@ compliance:
   - {region: India, note: "Consumer Protection (E-Commerce) Rules, 2020: seller details, return policy, grievance officer"}
   - {region: India, note: "Digital Personal Data Protection Act, 2023"}
   - {region: India, note: "GST-compliant invoicing"}
+
+# Default UI direction for Stage 4 (ui_designer).
+ui:
+  tagline: Handwoven, delivered to your door
+  primary: "#9D174D"
+  accent: "#CA8A04"
+  font: serif
+  radius: soft
+  density: comfortable
+  mood: warm, crafted, premium
+  ux_principles:
+    - Large product photos; fabric, weaver and price visible without opening the product
+    - The cart and the order total are always one tap away
+    - "Checkout in few steps: address, payment (dummy gateway), confirmation"
+    - "Trust before payment: returns policy, delivery time and secure-payment note at checkout"
+    - Order status is clear from the order list without opening each order
+  category_icons: {Sarees: "🥻", Dupattas: "🧣", Stoles: "🧶", Kurtas: "👘"}
+  safety_tips:
+    - Easy returns within 7 days
+    - Secure payment (dummy gateway in this demo)

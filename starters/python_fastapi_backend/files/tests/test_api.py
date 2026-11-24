@@ -74,3 +74,21 @@ def test_dummy_payment_gives_static_responses(client):
     assert ok["status"] == "success" and ok["reference"].startswith("DUMMY-")
     failed = client.post("/payments/dummy", json={"amount": 99, "simulate_failure": True}, headers=headers).json()
     assert failed["status"] == "failed"
+
+
+def test_phone_is_masked_until_login_and_seller_can_mark_sold(client):
+    admin, user = seed_users()
+    item = client.get("/items").json()[0]
+    assert "x" in item["seller"]["phone_masked"]
+    assert client.get(f"/items/{item['id']}/contact").status_code == 401
+    headers = login(client, user["email"], user["password"])
+    assert client.get(f"/items/{item['id']}/contact", headers=headers).json()["phone"]
+    mine = client.get("/my/items", headers=headers).json()
+    live = next(i for i in mine if i["status"] == "active")
+    assert client.patch(f"/my/items/{live['id']}", json={"status": "sold"}, headers=headers).json()["status"] == "sold"
+    assert live["id"] not in [i["id"] for i in client.get("/items").json()]
+
+
+def test_sorting_by_price(client):
+    prices = [i["price"] for i in client.get("/items?sort=price_asc").json()]
+    assert prices == sorted(prices)

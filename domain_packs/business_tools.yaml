@@ -19,3 +19,20 @@ nfrs:
   - Performance with large record counts
 compliance:
   - {region: India, note: "Digital Personal Data Protection Act, 2023 if employee or customer personal data is stored"}
+
+# Default UI direction for Stage 4 (ui_designer).
+ui:
+  tagline: Your work, in one place
+  primary: "#1D4ED8"
+  accent: "#0EA5E9"
+  font: sans
+  radius: soft
+  density: compact
+  mood: calm, efficient, professional
+  ux_principles:
+    - Dense, sortable tables with filters that stay visible
+    - Every list has search; every action has a clear confirmation
+    - Keyboard friendly forms with inline validation
+    - Status colours mean the same thing on every screen
+  category_icons: {}
+  safety_tips: []

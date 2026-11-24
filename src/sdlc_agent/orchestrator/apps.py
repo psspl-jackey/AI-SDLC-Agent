@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from ..build.git_host import GitHost, GuardedGit, LocalGitHost
 from ..build.runner import AppRunner, lan_ip, lan_ips, port_open
-from ..build.starters import AppPlan, plan_apps, render_apps
+from ..build.starters import AppPlan, plan_apps, render_apps, theme_files
 from ..state.models import Project, RunCheck
 from .pipeline import Deps
 
@@ -59,6 +59,39 @@ def add_starter_apps(deps: Deps, project_id: str, git: GitHost | None = None,
     project.starter_apps += [d for d in new if d not in project.starter_apps]
     project.log(f"Starter apps: pull request {pr} from {branch} merged into develop by code "
                 f"(templates, not model output): {', '.join(new)}")
+    deps.store.save(project)
+    return project
+
+
+def apply_theme(deps: Deps, project_id: str, git: GitHost | None = None) -> Project:
+    """Re-write only the theme files of the starter apps (src/theme.ts) after the UI theme changed.
+    Feature code is untouched. Running apps pick the change up live (their dev servers watch files)."""
+    project = deps.store.load(project_id)
+    files = theme_files(project)
+    if not files:
+        raise RuntimeError("No starter apps with a UI yet: add the starter apps first")
+    git = git or LocalGitHost(deps.settings.data_dir / "build" / project.id)
+    if hasattr(git, "read_tree"):
+        current = git.read_tree("develop")
+        files = {k: v for k, v in files.items() if current.get(k, "").strip() != v.strip()}
+        if not files:
+            project.log("UI theme: the apps already use this theme")
+            deps.store.save(project)
+            return project
+    guarded = GuardedGit(git)
+    n = sum(1 for line in project.notes if "UI theme applied" in line) + 1
+    branch = f"feature/T-000-ui-theme-{n}"
+    guarded.create_branch(branch)
+    guarded.commit_files(branch, files, f"{STARTER_KEY}: apply the UI theme ({project.design.theme.source.replace('_', ' ')})"
+                         if project.design and project.design.theme else f"{STARTER_KEY}: apply the UI theme", STARTER_KEY)
+    pr = guarded.open_pull_request(branch, f"{STARTER_KEY}: UI theme", "Theme files re-written from the approved UI "
+                                   "theme (Stage 4). No feature code changed.", [])
+    if hasattr(git, "merge"):
+        git.merge(branch)
+    r = runner(deps, project_id)
+    if (r.workspace / ".git").exists():
+        r.sync()  # running dev servers reload the new theme
+    project.log(f"UI theme applied to {', '.join(sorted(files))} ({pr}, merged by code)")
     deps.store.save(project)
     return project
 

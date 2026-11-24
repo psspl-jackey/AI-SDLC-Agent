@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import or_
+from sqlalchemy import inspect, or_
 from sqlalchemy.orm import Session
 
 from .auth import admin_user, check_password, current_user, hash_password, make_token
@@ -15,8 +15,21 @@ from .models import Category, Favourite, Item, User
 from .seed import load_seed, seed
 
 
+def _schema_changed() -> bool:
+    """True when the demo database was made by an older version of the models."""
+    found = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        if found.has_table(table.name):
+            have = {c["name"] for c in found.get_columns(table.name)}
+            if not {c.name for c in table.columns} <= have:
+                return True
+    return False
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if _schema_changed():  # demo data only; real environments use Alembic migrations
+        Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         seed(db)
@@ -51,6 +64,10 @@ class ModerateIn(BaseModel):
     featured: Optional[bool] = None
 
 
+class StatusIn(BaseModel):
+    status: str  # active | sold
+
+
 class PaymentIn(BaseModel):
     amount: float
     purpose: str = ""
@@ -58,7 +75,13 @@ class PaymentIn(BaseModel):
 
 
 def user_out(u: User) -> dict:
-    return {"id": u.id, "name": u.name, "email": u.email, "role": u.role, "city": u.city, "active": u.active}
+    return {"id": u.id, "name": u.name, "email": u.email, "role": u.role, "city": u.city, "active": u.active,
+            "member_since": u.member_since}
+
+
+def masked(phone: str) -> str:
+    digits = phone.replace(" ", "")
+    return f"{digits[:3]} {'x' * 5} {digits[-2:]}" if len(digits) >= 6 else ""
 
 
 def item_out(i: Item, db: Session) -> dict:
@@ -66,7 +89,9 @@ def item_out(i: Item, db: Session) -> dict:
     seller = db.get(User, i.seller_id)
     return {"id": i.id, "title": i.title, "description": i.description, "price": i.price, "city": i.city,
             "image_url": i.image_url, "category_id": i.category_id, "category": cat.name if cat else "",
-            "seller": {"id": seller.id, "name": seller.name} if seller else None, "status": i.status,
+            "seller": {"id": seller.id, "name": seller.name, "member_since": seller.member_since,
+                       "phone_masked": masked(seller.phone), "verified": bool(seller.phone)} if seller else None,
+            "status": i.status,
             "featured": i.featured, "created_at": i.created_at.isoformat() if i.created_at else None}
 
 
@@ -112,7 +137,8 @@ def categories(db: Session = Depends(get_db)):
 
 
 @app.get("/items")
-def items(q: str = "", category_id: Optional[int] = None, city: str = "", db: Session = Depends(get_db)):
+def items(q: str = "", category_id: Optional[int] = None, city: str = "", sort: str = "newest",
+          db: Session = Depends(get_db)):
     query = db.query(Item).filter(Item.status == "active")
     if q:
         query = query.filter(or_(Item.title.ilike(f"%{q}%"), Item.description.ilike(f"%{q}%")))
@@ -120,7 +146,9 @@ def items(q: str = "", category_id: Optional[int] = None, city: str = "", db: Se
         query = query.filter(Item.category_id == category_id)
     if city:
         query = query.filter(Item.city == city)
-    return [item_out(i, db) for i in query.order_by(Item.featured.desc(), Item.created_at.desc())]
+    order = {"price_asc": [Item.price.asc()], "price_desc": [Item.price.desc()]}.get(
+        sort, [Item.featured.desc(), Item.created_at.desc()])
+    return [item_out(i, db) for i in query.order_by(*order)]
 
 
 @app.get("/items/{item_id}")
@@ -137,6 +165,28 @@ def create_item(body: ItemIn, user: User = Depends(current_user), db: Session = 
         raise HTTPException(422, "Unknown category")
     i = Item(**body.model_dump(), seller_id=user.id, status="pending")
     db.add(i)
+    db.commit()
+    return item_out(i, db)
+
+
+@app.get("/items/{item_id}/contact")
+def contact(item_id: int, _: User = Depends(current_user), db: Session = Depends(get_db)):
+    """The seller's phone number, only for logged-in users (dummy numbers in the demo data)."""
+    i = db.get(Item, item_id)
+    if i is None or i.status != "active":
+        raise HTTPException(404, "Not found")
+    seller = db.get(User, i.seller_id)
+    return {"name": seller.name, "phone": seller.phone}
+
+
+@app.patch("/my/items/{item_id}")
+def set_my_item_status(item_id: int, body: StatusIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    i = db.get(Item, item_id)
+    if i is None or i.seller_id != user.id:
+        raise HTTPException(404, "Not found")
+    if body.status not in ("active", "sold") or i.status in ("pending", "removed"):
+        raise HTTPException(422, "Only live items can be marked as sold (and sold ones made live again)")
+    i.status = body.status
     db.commit()
     return item_out(i, db)
 
@@ -187,7 +237,7 @@ def dummy_payment(body: PaymentIn, user: User = Depends(current_user)):
 def stats(_: User = Depends(admin_user), db: Session = Depends(get_db)):
     count = lambda s: db.query(Item).filter(Item.status == s).count()  # noqa: E731
     return {"users": db.query(User).count(), "items_active": count("active"), "items_pending": count("pending"),
-            "items_removed": count("removed"), "categories": db.query(Category).count()}
+            "items_sold": count("sold"), "items_removed": count("removed"), "categories": db.query(Category).count()}
 
 
 @app.get("/admin/items")
@@ -204,7 +254,7 @@ def moderate(item_id: int, body: ModerateIn, _: User = Depends(admin_user), db: 
     if i is None:
         raise HTTPException(404, "Not found")
     if body.status is not None:
-        if body.status not in ("pending", "active", "removed"):
+        if body.status not in ("pending", "active", "sold", "removed"):
             raise HTTPException(422, "Unknown status")
         i.status = body.status
     if body.featured is not None:

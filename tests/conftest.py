@@ -206,6 +206,11 @@ class FakeLLM:
             ]}
         elif "gap register" in system:
             data = {"duplicates": [], "rewrites": []}
+        elif "senior UI designer" in system:
+            data = {"tagline": "Local deals, fast", "primary": "green", "accent": "#FFD700", "background": "#101010",
+                    "text": "#222222", "font": "comic", "radius": "round", "density": "compact", "mood": "fresh",
+                    "ux_principles": ["Nice", "Show the seller's city on every card so buyers know the distance"],
+                    "reason": "fresh market feel"}
         else:
             raise AssertionError(f"Unexpected prompt: {system[:80]}")
         return LLMResponse(text=json.dumps(data), model="fake", input_tokens=100, output_tokens=50)

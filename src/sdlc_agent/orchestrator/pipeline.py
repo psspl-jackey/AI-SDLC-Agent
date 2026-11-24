@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from ..agents import domain_research, estimator, planner, platform_decision, requirements_analyst, reviewer, skills_setup, solution_design
+from ..agents import domain_research, estimator, planner, platform_decision, requirements_analyst, reviewer, skills_setup, solution_design, ui_designer
 from ..config import Settings, get_settings
 from ..gaps.register import add_gap, coverage_check, gate_passed, gate_status
 from ..intake.brief import apply_intake_answers, build_brief, completeness_of, extract_sow_lines, fill_thin_brief
@@ -558,6 +558,7 @@ def run_stage4(deps: Deps, project_id: str) -> Project:
         raise
     solution_design.apply(project, result)
     d = project.design
+    d.theme = _theme(deps, project)
     failures = gate_failures(project, 3)
     project.stage_status[Stage.DESIGN] = StageStatus.WAITING_GATE
     project.log(
@@ -568,6 +569,32 @@ def run_stage4(deps: Deps, project_id: str) -> Project:
     )
     deps.store.save(project)
     deps.tracer.record(project_id, {"type": "stage_end", "stage": Stage.DESIGN.value})
+    return project
+
+
+def _theme(deps: Deps, project: Project):
+    """Theme from the domain pack, adjusted by the UI direction. A failed model call keeps the default."""
+    try:
+        theme = ui_designer.design_theme(deps.llm_for(project.id, ui_designer.NAME), project)
+    except Exception as exc:  # the look must never block the design
+        project.log(f"UI theme: could not read the UI direction ({exc!r}); used the domain default")
+        theme = ui_designer.build_theme(project)
+    project.log(f"UI theme ({theme.source.replace('_', ' ')}): primary {theme.primary}, accent {theme.accent}, "
+                f"{theme.font} font, {theme.radius} corners"
+                + (f"; code adjusted: {'; '.join(theme.adjustments)}" if theme.adjustments else ""))
+    return theme
+
+
+def set_ui_direction(deps: Deps, project_id: str, direction: str) -> Project:
+    """Change the look and feel (client or team suggestions) without re-running the whole design.
+    The theme is cosmetic, so Gate 3 stays as it is; the change is logged."""
+    project = deps.store.load(project_id)
+    if project.design is None:
+        raise RuntimeError("Run the solution design (Stage 4) first")
+    project.ui_direction = direction.strip()
+    project.design.theme = _theme(deps, project)
+    project.log("UI direction " + (f"set: {project.ui_direction}" if project.ui_direction else "cleared: domain default"))
+    deps.store.save(project)
     return project
 
 

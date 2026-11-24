@@ -18,6 +18,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     role: Mapped[str] = mapped_column(String(20), default="user")  # user | admin
     city: Mapped[str] = mapped_column(String(80), default="")
+    phone: Mapped[str] = mapped_column(String(20), default="")
+    member_since: Mapped[int] = mapped_column(Integer, default=lambda: datetime.now(timezone.utc).year)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -37,7 +39,7 @@ class Item(Base):
     image_url: Mapped[str] = mapped_column(String(500), default="")
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | active | removed
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | active | sold | removed
     featured: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
