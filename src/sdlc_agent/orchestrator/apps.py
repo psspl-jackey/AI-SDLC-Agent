@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass
 
 from ..build.git_host import GitHost, GuardedGit, LocalGitHost
-from ..build.runner import AppRunner, lan_ip, port_open
+from ..build.runner import AppRunner, lan_ip, lan_ips, port_open
 from ..build.starters import AppPlan, plan_apps, render_apps
 from ..state.models import Project, RunCheck
 from .pipeline import Deps
@@ -152,6 +152,7 @@ class AppStatus:
     running: bool
     listening: bool
     url: str
+    urls: list[str]  # mobile: one Expo address per local network
     log: str
     last_install: RunCheck | None
     last_test: RunCheck | None
@@ -166,7 +167,9 @@ def app_status(deps: Deps, project: Project) -> list[AppStatus]:
         out.append(AppStatus(
             dir=app.dir, surface=app.surface, pack=app.pack, platforms=app.platforms,
             running=r.pid(app.dir) is not None, listening=port_open(app.port),
-            url=app.url.format(port=app.port, lan_ip=ip), log=r.log_tail(app.dir, 3000),
+            url=app.url.format(port=app.port, lan_ip=ip),
+            urls=[app.url.format(port=app.port, lan_ip=x) for x in lan_ips()] if "{lan_ip}" in app.url else [],
+            log=r.log_tail(app.dir, 3000),
             last_install=last("install"), last_test=last("test"),
         ))
     return out

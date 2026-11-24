@@ -561,18 +561,19 @@ def run_apps_section(project) -> None:
             st.markdown(f"**{label}** · `{a.dir}` · {a.pack} · {state}" + (f" · {checks}" if checks else ""))
             if a.running and a.listening:
                 if a.surface == "mobile":
-                    left, right = st.columns([1, 3])
-                    try:
-                        import segno
-                        left.image(segno.make(a.url).png_data_uri(scale=5), width=170)
-                    except Exception:
-                        pass
-                    right.markdown(
-                        f"Expo address: `{a.url}`  \n"
-                        "**iPhone or Android phone:** install **Expo Go**, join the same Wi-Fi as this computer, "
-                        "then scan the QR code (iPhone: Camera app; Android: inside Expo Go).  \n"
-                        "**Android emulator:** start an emulator in Android Studio, install Expo Go on it, and open "
-                        "the address above in Expo Go.")
+                    st.markdown(
+                        "**iPhone or Android phone:** install **Expo Go**, then scan the code for the network your "
+                        "phone is on (iPhone: Camera app; Android: inside Expo Go).  \n"
+                        "**Android emulator:** start an emulator in Android Studio, install Expo Go on it, and enter "
+                        "an address below in Expo Go.")
+                    cols = st.columns(max(len(a.urls), 1))
+                    for col, url in zip(cols, a.urls or [a.url]):
+                        try:
+                            import segno
+                            col.image(segno.make(url).png_data_uri(scale=5), width=170)
+                        except Exception:
+                            pass
+                        col.code(url, language=None)
                 else:
                     st.markdown(f"Open: [{a.url}]({a.url})")
             for c in (a.last_install, a.last_test):

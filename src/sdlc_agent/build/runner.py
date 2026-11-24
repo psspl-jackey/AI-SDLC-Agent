@@ -8,6 +8,7 @@ are run, never commands written by the model. A Docker sandbox replaces this lat
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import signal
 import socket
@@ -27,6 +28,19 @@ def lan_ip() -> str:
             return s.getsockname()[0]
     except OSError:
         return "127.0.0.1"
+
+
+def lan_ips() -> list[str]:
+    """Every local network address (Ethernet, Wi-Fi...), default route first. A phone must use the one
+    on its own network; the mobile app then reaches the backend on the same address."""
+    ips = [lan_ip()]
+    try:
+        out = subprocess.run(["ifconfig"], capture_output=True, text=True, timeout=5).stdout
+        ips += re.findall(r"inet (\d+\.\d+\.\d+\.\d+) netmask", out)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    private = re.compile(r"^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)")
+    return list(dict.fromkeys(ip for ip in ips if private.match(ip))) or ["127.0.0.1"]
 
 
 def port_open(port: int, host: str = "127.0.0.1") -> bool:
