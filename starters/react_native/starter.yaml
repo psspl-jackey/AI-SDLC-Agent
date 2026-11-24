@@ -1,0 +1,13 @@
+# Runnable Expo (React Native) starter: one app for Android and iOS. Open it with Expo Go
+# (iPhone or Android phone on the same Wi-Fi) or on the Android emulator.
+pack: react_native
+platforms: [android, ios]
+dir: apps/mobile
+port: 8081
+install:
+  - "npm install --no-audit --no-fund"
+test:
+  - "npx tsc --noEmit"
+  - "npx expo install --check"
+start: "npx expo start --lan --port {port}"
+url: "exp://{lan_ip}:{port}"

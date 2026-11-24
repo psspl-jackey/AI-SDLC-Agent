@@ -22,6 +22,8 @@ from sdlc_agent.orchestrator import (
 from sdlc_agent.orchestrator.build import (
     build_next, failed_tickets, in_scope, latest, local_host, mark_done_by_developers, mark_merged,
 )
+from sdlc_agent.orchestrator.apps import add_starter_apps, app_status, check_apps, start_apps, stop_apps
+from sdlc_agent.build.starters import plan_apps, seed_data
 from sdlc_agent.orchestrator.handover import record_signoff, run_stage9
 from sdlc_agent.orchestrator.release import record_test_result, run_stage8, set_checklist_item
 from sdlc_agent.orchestrator.pipeline import GATE_STAGE
@@ -491,6 +493,7 @@ def build_screen(project) -> None:
                 if c3.button("Done", key=f"hdone_{t.id}"):
                     mark_done_by_developers(deps, project, t.id, url)
                     st.rerun()
+    run_apps_section(project)
     with st.expander("Set Jira keys after the CSV import"):
         st.caption("Branches and commit messages use the Jira key once it is set, otherwise the ticket id.")
         tickets = {f"{t.id} {t.summary}": t for t in project.plan.tasks()}
@@ -500,6 +503,90 @@ def build_screen(project) -> None:
             tickets[pick].jira_issue_key = key.strip().upper()
             deps.store.save(project)
             st.rerun()
+
+
+SURFACE_LABELS = {"backend": "Backend API", "admin_panel": "Admin panel", "web": "Website",
+                  "mobile": "Mobile app (Android and iOS)", "android": "Android app", "ios": "iOS app"}
+
+
+def run_apps_section(project) -> None:
+    """Run what was built: starter apps with dummy data, install, test, start, stop."""
+    st.subheader("Run the apps")
+    st.caption("Starter apps are written by code from the approved stacks (not by the model) and run with dummy "
+               "data. Agent and developer tickets add features inside them. Install and test results are recorded, "
+               "so 'done' can be checked against 'it runs'. Commands run on this computer.")
+    apps, notes = plan_apps(project)
+    for note in notes:
+        st.warning(note)
+    missing = [a for a in apps if a.dir not in project.starter_apps]
+    if missing:
+        st.write("Not in the repository yet: " + ", ".join(f"{SURFACE_LABELS.get(a.surface, a.surface)} "
+                                                       f"(`{a.dir}`, {a.pack})" for a in missing))
+        if st.button("Add starter apps", type="primary"):
+            try:
+                add_starter_apps(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+                return
+            st.rerun()
+    if not project.starter_apps:
+        return
+    c1, c2, c3 = st.columns(3)
+    if c1.button("Install and test", help="Installs packages and runs each app's tests on the current develop. "
+                                          "The first run downloads packages and takes a few minutes."):
+        with st.spinner("Installing and testing (first run takes a few minutes)"):
+            try:
+                check_apps(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+        st.rerun()
+    if c2.button("Start apps", type="primary"):
+        with st.spinner("Starting the apps"):
+            try:
+                start_apps(deps, project.id)
+            except Exception as exc:
+                st.error(friendly_error(exc))
+        st.rerun()
+    if c3.button("Stop apps"):
+        stop_apps(deps, project.id)
+        st.rerun()
+
+    statuses = app_status(deps, project)
+    seed = seed_data(project)
+    for a in statuses:
+        label = SURFACE_LABELS.get(a.surface, a.surface)
+        state = "🟢 running" if a.running and a.listening else "🟡 starting" if a.running else "⚪ stopped"
+        checks = " · ".join(f"{c.step} {'✅' if c.ok else '❌'}" for c in (a.last_install, a.last_test) if c)
+        with st.container(border=True):
+            st.markdown(f"**{label}** · `{a.dir}` · {a.pack} · {state}" + (f" · {checks}" if checks else ""))
+            if a.running and a.listening:
+                if a.surface == "mobile":
+                    left, right = st.columns([1, 3])
+                    try:
+                        import segno
+                        left.image(segno.make(a.url).png_data_uri(scale=5), width=170)
+                    except Exception:
+                        pass
+                    right.markdown(
+                        f"Expo address: `{a.url}`  \n"
+                        "**iPhone or Android phone:** install **Expo Go**, join the same Wi-Fi as this computer, "
+                        "then scan the QR code (iPhone: Camera app; Android: inside Expo Go).  \n"
+                        "**Android emulator:** start an emulator in Android Studio, install Expo Go on it, and open "
+                        "the address above in Expo Go.")
+                else:
+                    st.markdown(f"Open: [{a.url}]({a.url})")
+            for c in (a.last_install, a.last_test):
+                if c and not c.ok:
+                    with st.expander(f"{c.step} failed: output"):
+                        st.code(c.output or "(no output)")
+            if a.log:
+                with st.expander("Log"):
+                    st.code(a.log[-3000:])
+    with st.expander("Demo accounts (dummy data, local only)"):
+        for u in seed["users"]:
+            st.write(f"- `{u['email']}` / `{u['password']}` ({u['role']})")
+        st.caption(f"{len(seed['items'])} dummy {seed['config']['items_label'].lower()} in "
+                   f"{', '.join(seed['config']['cities'])}; some wait for admin approval.")
 
 
 def traceability_screen(project) -> None:

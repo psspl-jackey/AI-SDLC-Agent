@@ -1,0 +1,13 @@
+# Runnable backend starter for the python_fastapi_backend tech pack.
+# Commands run inside the app folder; {python} is the harness's Python, {port} the port below.
+pack: python_fastapi_backend
+platforms: [backend]
+dir: apps/backend
+port: 8000
+install:
+  - "{python} -m venv .venv"
+  - ".venv/bin/python -m pip install -q -r requirements.txt"
+test:
+  - ".venv/bin/python -m pytest -q"
+start: ".venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port {port}"
+url: "http://localhost:{port}/docs"

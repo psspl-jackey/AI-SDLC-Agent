@@ -52,6 +52,11 @@ not new agents.
   cited feature, platforms only if the client said them, analyst follow-up for unmapped lines, reviewer merge
   guard, thin briefs filled from the domain pack, dummy-payment wording) and Stage 7 fixes (only coding tickets
   go to the developer agent; one follow-up call for missing tests; local pull request diff on the dashboard).
+- Done (same branch): runnable starter apps and run checks. Stage 7 first puts code-written starter apps on
+  develop (`starters/<pack>/`, rendered by `build/starters.py`: FastAPI backend with dummy data, Next.js or Vite
+  admin panel and website, one Expo app for Android and iOS), then tickets extend them. `orchestrator/apps.py`
+  installs, tests, starts and stops them on a worktree of develop (`build/runner.py`), results in
+  `project.run_checks`; "Run the apps" on the Build screen shows links and an Expo Go QR code.
 - Next: re-run the eval and keep tuning prompts; GitHub host and
   Docker sandbox (Stage 7 and automated test runs in Stage 8); rate card for team plan, timeline and cost; proposal doc and
   PPT once the Prakash Infotech templates arrive.
@@ -108,6 +113,8 @@ not new agents.
 - `src/sdlc_agent/agents/` requirements_analyst, domain_research, reviewer, platform_decision, estimator, change_analyst, solution_design, skills_setup, planner, developer, qa, handover (run() is pure, apply() merges)
 - `src/sdlc_agent/orchestrator/pipeline.py` Stage 0, Stage 1 LangGraph graph, Gate 1
 - `src/sdlc_agent/build/git_host.py` GitHost interface, GuardedGit rules, Fake and Local hosts; `orchestrator/build.py` Stage 7 loop, `orchestrator/release.py` Stage 8, `orchestrator/handover.py` Stage 9
+- `starters/` runnable app templates per tech pack (Flutter, native and Node backends have none yet);
+  `build/starters.py` renders them, `build/runner.py` runs them, `orchestrator/apps.py` Stage 7 run checks
 - `src/sdlc_agent/traceability.py` requirement -> ... -> pull request matrix (no model)
 - `src/sdlc_agent/gaps/`, `questions/`, `tracing.py`, `exports.py`, `evals.py` (scores runs against `samples/*.answers.yaml`)
 - `domain_packs/*.yaml`, `tech_packs/*.yaml` (stacks Stage 4 may choose), `skills/*.md`, `dashboard/app.py`, `samples/`, `tests/`

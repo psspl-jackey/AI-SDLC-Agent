@@ -18,6 +18,7 @@ from typing import Optional
 
 from ..agents import developer
 from ..build.git_host import GitHost, GitRuleError, GuardedGit, LocalGitHost
+from ..build.starters import plan_apps
 from ..state.models import BuildRecord, Project, Stage, StageStatus, Ticket
 from .pipeline import Deps
 
@@ -108,6 +109,9 @@ def build_next(deps: Deps, project_id: str, git: GitHost | None = None,
     if project.stage_status[Stage.PLAN] is not StageStatus.DONE or project.plan is None:
         raise RuntimeError("Run the internal plan (Stage 6) before the build (Stage 7)")
     max_sprint = deps.settings.build_max_sprint
+    if not project.starter_apps and plan_apps(project)[0]:
+        from .apps import add_starter_apps  # runnable skeleton first, so tickets add code into real apps
+        project = add_starter_apps(deps, project_id, git or local_host(deps, project_id))
     if retry_ticket_id:
         ticket = next((t for t in failed_tickets(project, max_sprint) if t.id == retry_ticket_id), None)
         if ticket is None:

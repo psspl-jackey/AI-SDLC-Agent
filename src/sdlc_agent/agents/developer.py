@@ -91,6 +91,16 @@ def brief(project: Project, ticket: Ticket) -> str:
         parts += ["", "## API", ""] + [f"- {e.method} {e.path}: {e.purpose}" for e in endpoints]
     if screens:
         parts += ["", "## Screens", ""] + [f"- {s.id} {s.name}: {s.purpose}" for s in screens]
+    if project.starter_apps:
+        from ..build.starters import plan_apps
+        apps = [a for a in plan_apps(project)[0] if a.dir in project.starter_apps]
+        home = next((a.dir for a in apps if ticket.platform in a.platforms), None)
+        parts += ["", "## Repository layout", "",
+                  "Runnable starter apps already exist (login, list, detail, admin moderation, dummy payment). "
+                  "Extend them; do not create a second app or a new project setup.",
+                  *[f"- {a.dir}: {', '.join(a.platforms)} ({a.pack})" for a in apps]]
+        if home:
+            parts.append(f"Put this ticket's code inside {home}/.")
     if stack_skill:
         parts += ["", "## Stack skill", "", stack_skill.content]
     if "project-context" in skills:

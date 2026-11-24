@@ -1,0 +1,12 @@
+# Runnable Next.js starter (admin panel or customer website). UI code comes from starters/ui/<surface>.
+pack: nextjs
+platforms: [admin_panel, web]
+dir: {admin_panel: apps/admin, web: apps/web}
+port: {admin_panel: 3000, web: 3001}
+ui: true
+install:
+  - "npm install --no-audit --no-fund"
+test:
+  - "npm run build"
+start: "npx next dev -H 0.0.0.0 -p {port}"
+url: "http://localhost:{port}"

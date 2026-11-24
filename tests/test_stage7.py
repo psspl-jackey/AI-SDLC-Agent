@@ -90,8 +90,10 @@ def test_build_order_merge_and_handover(deps):
     project, rec = build_next(deps, project.id, git)
     assert rec.status == "pr_open" and rec.ticket_id == setup.id
     assert rec.branch == f"feature/{setup.id}-project-setup-and-ci"
-    assert git.commits[0][1].startswith(f"{setup.id}: ")
-    assert "Implements cross-cutting work" in git.pull_requests[0]["body"]
+    starter = [m for _, m in git.commits if m.startswith("T-000: ")]
+    assert starter and git.commits[0][1].startswith("T-000: ")  # starter apps go in before any ticket
+    assert git.commits[len(starter)][1].startswith(f"{setup.id}: ")
+    assert "Implements cross-cutting work" in git.pull_requests[-1]["body"]
     assert next_ready(project, 1) is None  # blocked until a human merges setup
     project, rec = build_next(deps, project.id, git)
     assert rec is None and project.stage_status[Stage.BUILD] is StageStatus.RUNNING
@@ -104,8 +106,9 @@ def test_build_order_merge_and_handover(deps):
         if rec.status == "pr_open":
             project = mark_merged(deps, project, rec.ticket_id, git)
     assert all(b.status == "pr_open" or b.status == "merged" for b in built)
-    assert all("REQ-001" in pr["body"] and pr["base"] == "develop" for pr in git.pull_requests[1:])
-    assert len(git.pull_requests) == len(scope)  # every agent ticket built
+    ticket_prs = [pr for pr in git.pull_requests if not pr["head"].startswith("feature/T-000-")]
+    assert all("REQ-001" in pr["body"] and pr["base"] == "develop" for pr in ticket_prs[1:])
+    assert len(ticket_prs) == len(scope)  # every agent ticket built
     qa = next(t for t in project.plan.tasks() if "Test plan" in t.summary)
     assert qa not in scope  # QA planning is the team's ticket, not the developer agent's
     assert project.stage_status[Stage.BUILD] is StageStatus.DONE
@@ -196,7 +199,8 @@ def test_local_git_host_creates_real_branches_and_merges(tmp_path, deps):
     branches = subprocess.run(["git", "branch", "--list"], cwd=repo, capture_output=True, text=True).stdout
     assert rec.branch in branches and "develop" in branches
     prs = json.loads((tmp_path / "build" / "pull_requests.json").read_text())
-    assert prs[0]["head"] == rec.branch and prs[0]["base"] == "develop"
+    assert prs[0]["head"] == "feature/T-000-starter-apps"  # starter apps first, merged by code
+    assert prs[-1]["head"] == rec.branch and prs[-1]["base"] == "develop"
     assert not (repo / "app" / "pubspec.yaml").exists()  # develop is untouched until the merge
     diff = host.diff(rec.branch)
     assert "app/pubspec.yaml" in diff and "+name: app" in diff  # what the reviewer sees before merging

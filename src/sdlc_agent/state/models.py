@@ -406,6 +406,18 @@ class BuildRecord(BaseModel):
     created_at: datetime = Field(default_factory=now)
 
 
+class RunCheck(BaseModel):
+    """One install, test or start of a starter app in the project repo (Stage 7 run check)."""
+    app: str  # apps/backend
+    step: Literal["install", "test", "start"]
+    ok: bool
+    command: str = ""
+    output: str = ""  # tail of the output
+    seconds: float = 0
+    commit: str = ""  # develop commit that was checked
+    at: datetime = Field(default_factory=now)
+
+
 class TestCase(BaseModel):
     id: str  # TC-001
     title: str
@@ -485,6 +497,8 @@ class Project(BaseModel):
     skill_pack: Optional[SkillPack] = None  # Stage 5
     plan: Optional[Plan] = None  # Stage 6
     builds: list[BuildRecord] = Field(default_factory=list)  # Stage 7; kept as history across re-plans
+    starter_apps: list[str] = Field(default_factory=list)  # Stage 7: app folders written from starters/
+    run_checks: list[RunCheck] = Field(default_factory=list)  # Stage 7/8: install, test, start results
     release: Optional[Release] = None  # Stage 8
     handover: Optional[Handover] = None  # Stage 9
     change_requests: list[ChangeRequest] = Field(default_factory=list)
