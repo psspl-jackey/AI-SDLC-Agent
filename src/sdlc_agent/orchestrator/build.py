@@ -130,7 +130,8 @@ def build_next(deps: Deps, project_id: str, git: GitHost | None = None,
     try:
         result = developer.run(deps.llm_for(project.id, developer.NAME), project, ticket)
         llm = deps.llm_for(project.id, developer.NAME)
-        files = {f["path"].strip(): f["content"] for f in result.get("files", []) if f.get("path", "").strip()}
+        files = {f["path"].strip(): developer.clean_content(f["path"].strip(), f["content"])
+                 for f in result.get("files", []) if f.get("path", "").strip()}
         if developer.needs_tests(files):
             files.update(developer.add_tests(llm, project, ticket, files))
             if developer.needs_tests(files):

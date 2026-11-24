@@ -210,3 +210,14 @@ def test_new_plan_supersedes_build_records(deps):
     project = run_stage6(deps, project.id)
     assert all(b.status == "superseded" for b in project.builds)
     assert project.stage_status[Stage.BUILD] is StageStatus.PENDING
+
+
+@pytest.mark.parametrize("path, content, expected", [
+    ("web/package.json", '```json\n{"name": "web"}\n```', '{"name": "web"}\n'),
+    ("src/app.py", "```python\nprint(1)\n```\n", "print(1)\n"),
+    ("src/app.py", "print(1)\n", "print(1)\n"),
+    ("README.md", "```bash\nnpm i\n```", "```bash\nnpm i\n```"),
+])
+def test_code_fences_around_generated_files_are_removed(path, content, expected):
+    from sdlc_agent.agents.developer import clean_content
+    assert clean_content(path, content) == expected

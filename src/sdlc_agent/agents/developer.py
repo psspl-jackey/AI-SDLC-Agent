@@ -49,11 +49,23 @@ framework of the stack skill. Put tests where that stack expects them (for examp
 src/__tests__/....test.tsx, tests/test_....py). Test real behaviour, not just that a file imports."""
 
 
+_FENCE = re.compile(r"\A\s*```[\w.+-]*[^\n]*\n(.*?)\n?```\s*\Z", re.DOTALL)
+
+
+def clean_content(path: str, content: str) -> str:
+    """Small models often wrap a file in a Markdown code fence; a fenced package.json or .py does not
+    run. Markdown files keep their fences."""
+    if path.lower().endswith((".md", ".markdown")):
+        return content
+    m = _FENCE.match(content)
+    return (m.group(1) if m else content).rstrip() + "\n"
+
+
 def add_tests(llm: LLMClient, project: Project, ticket: Ticket, files: dict[str, str]) -> dict[str, str]:
     code = "\n\n".join(f"### {p}\n{c[:4000]}" for p, c in files.items() if CODE_EXT.search(p))[:16000]
     reply = complete_json(llm, TESTS_SYSTEM, f"{brief(project, ticket)}\n## Code to test\n\n{code}\n\n"
                           'Return JSON: {"files": [{"path": str, "content": str}]} with only the new test files.', SHAPE)
-    return {f["path"].strip(): f["content"] for f in reply.get("files", [])
+    return {f["path"].strip(): clean_content(f["path"].strip(), f["content"]) for f in reply.get("files", [])
             if f.get("path", "").strip() and is_test_file(f["path"].strip())}
 
 
